@@ -1,0 +1,37 @@
+Input posiform \phi
+a) Network:
+1. Find max flow in G_\phi:
+- find symmetric max flow:
+-- find max flow and symmetrize
+- then the residual network will be symmetric too
+2. Calculate residual network G_\psi:
+- calculate G_\psi from G_\phi. See bottom page 7 for formula
+(I) apply proposition 5 (page 10):
+-- calculate S from G_\psi
+-- calc J from S
+-- calc assignments y from J and S
+-- y is a strong autarky and hence x_i=y_i strong persistencies
+(II) apply proposition 7 (page 11ff):
+-- seciton 3.3.2 says remove negative capacities (how can there be any?)
+section 5 - NETWORK says to remove all arcs associated to the set of strong persistencies
+i think this are supposed to be all arcs connected to a node that has a strong persistency of x_i = y_i
+this might be because 3.3.3 Decomposition demands this but i am suprised that we can already remove some here and do not have to wait for prop 7
+-- calculate strong connected components
+-- separate them into type (14) and (15)
+-- use prop 7 for type (15), yields strong and weak persistencies
+--- how to find K_1 is K_1 and not K_1'?
+-- remove all arcs associated with strong and weak persistencies
+(III) apply proposition 8 (page 13f):
+- left are a disjoint set of strong components
+- find them by calculating the strong components
+
+b) HEURISTIC:
+- look for in [31] online
+
+c) COORDINATION:
+?????
+
+d) PROBING:
+TODO
+apply proposition 9
+proposition 3 to recover original graph
