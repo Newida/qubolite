@@ -248,6 +248,7 @@ def reduce_dynamic_range(
             if callback is not None:
                 callback(i, j, change, matrix_order, it)
         else:
+            print("Finished early")
             break
     return qubo(matrix_order.matrix)
 

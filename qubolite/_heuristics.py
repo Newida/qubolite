@@ -139,6 +139,10 @@ class MatrixOrder:
         self.matrix = matrix
         self.matrix = np.round(self.matrix, decimals=self.precision)
         self.sorted = np.sort(self.matrix, axis=None)
+        #unique = the sorted unique values
+        #indices = the indices of the first occurrences of the unique values in the original array
+        #sorted_indices = the indices to reconstruct the original array from the unique array
+        #count = the number of times each of the unique values comes up in the original array
         self.unique, self.indices, self.sorted_indices, self.counts = np.unique(self.matrix,
                                                                                 return_inverse=True,
                                                                                 return_index=True,
@@ -147,10 +151,10 @@ class MatrixOrder:
         self.min_index_lower = np.argmin(self.distances)
         self.min_index_upper = self.min_index_lower + 1
         self.min_distance = self.distances[self.min_index_lower]
-        self.exclusive_min_distance = np.min(self.distances[self.distances > self.min_distance])
-        self.second_min_distance = np.min(np.r_[self.distances[:self.min_index_lower],
+        self.exclusive_min_distance = np.min(self.distances[self.distances > self.min_distance]) #second lowest distance
+        self.second_min_distance = np.min(np.r_[self.distances[:self.min_index_lower], #minumum distance excluding the elments from the min distance
                                                 self.distances[self.min_index_lower + 1:]])
-        self.extra_summand = self.exclusive_min_distance - self.min_distance
+        self.extra_summand = self.exclusive_min_distance - self.min_distance #differenc of second lowest distance and lowest distance
         self.dynamic_range = np.log2((self.unique[-1] - self.unique[0]) / self.min_distance)
         self.unique_elements = len(self.unique)
 
