@@ -55,56 +55,72 @@ def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', **b
         raise NotImplementedError
     return i, j, change
 
-def _compute_pre_opt_bounds(Q, i, j, **kwargs):
-    lower_bound = {
-        'roof_dual': lb_roof_dual,
-        'min_sum': lb_negative_parameters
-    }[kwargs.get('lower_bound', 'roof_dual')]
-    upper_bound = {
-        'local_descent': ub_local_descent,
-        'sample': ub_sample
-    }[kwargs.get('upper_bound', 'local_descent')]
-    lower_bound = partial(lower_bound, **kwargs.get('lower_bound_kwargs', {}))
-    upper_bound = partial(upper_bound, **kwargs.get('upper_bound_kwargs', {}))
-    change_diff = kwargs.get('change_diff', 1e-08)
-    Q = qubo(Q)
-    if i != j:
-        # Define sub-qubos
-        Q_00, c_00, _ = Q.clamp({i: 0, j: 0})
-        Q_01, c_01, _ = Q.clamp({i: 0, j: 1})
-        Q_10, c_10, _ = Q.clamp({i: 1, j: 0})
-        Q_11, c_11, _ = Q.clamp({i: 1, j: 1})
-        # compute bounds
-        upper_00 = upper_bound(Q_00) + c_00
-        upper_01 = upper_bound(Q_01) + c_01
-        upper_10 = upper_bound(Q_10) + c_10
-        lower_11 = lower_bound(Q_11) + c_11
-        upper_or = min(upper_00, upper_01, upper_10)
-
-        lower_00 = lower_bound(Q_00) + c_00
-        lower_01 = lower_bound(Q_01) + c_01
-        lower_10 = lower_bound(Q_10) + c_10
-        upper_11 = upper_bound(Q_11) + c_11
-        lower_or = min(lower_00, lower_01, lower_10)
-
-        suboptimal = lower_11 > min(upper_00, upper_01, upper_10)
-        optimal = upper_11 < min(lower_00, lower_01, lower_10)
-        upper_bound = float('inf') if suboptimal else lower_or - upper_11 - change_diff
-        lower_bound = -float('inf') if optimal else upper_or - lower_11 + change_diff
+def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, **kwargs):
+    if prev_calculations is not None:
+        prev_change = prev_calculations[0]
+        prev_lowers = prev_calculations[1]
+        prev_uppers = prev_calculations[2]
+        prev_increase = prev_calculations[3]
+        if i != j:
+            if prev_increase:
+                pass
+            else:
+                pass
+        else:
+            if prev_increase:
+                pass
+            else:
+                pass
     else:
-        # Define sub-qubos
-        Q_0, c_0, _ = Q.clamp({i: 0})
-        Q_1, c_1, _ = Q.clamp({i: 1})
-        # Compute bounds
-        upper_0 = upper_bound(Q_0) + c_0
-        lower_1 = lower_bound(Q_1) + c_1
+        lower_bound = {
+            'roof_dual': lb_roof_dual,
+            'min_sum': lb_negative_parameters
+        }[kwargs.get('lower_bound', 'roof_dual')]
+        upper_bound = {
+            'local_descent': ub_local_descent,
+            'sample': ub_sample
+        }[kwargs.get('upper_bound', 'local_descent')]
+        lower_bound = partial(lower_bound, **kwargs.get('lower_bound_kwargs', {}))
+        upper_bound = partial(upper_bound, **kwargs.get('upper_bound_kwargs', {}))
+        change_diff = kwargs.get('change_diff', 1e-08)
+        Q = qubo(Q)
+        if i != j:
+            # Define sub-qubos
+            Q_00, c_00, _ = Q.clamp({i: 0, j: 0})
+            Q_01, c_01, _ = Q.clamp({i: 0, j: 1})
+            Q_10, c_10, _ = Q.clamp({i: 1, j: 0})
+            Q_11, c_11, _ = Q.clamp({i: 1, j: 1})
+            # compute bounds
+            upper_00 = upper_bound(Q_00) + c_00
+            upper_01 = upper_bound(Q_01) + c_01
+            upper_10 = upper_bound(Q_10) + c_10
+            lower_11 = lower_bound(Q_11) + c_11
+            upper_or = min(upper_00, upper_01, upper_10)
 
-        lower_0 = lower_bound(Q_0) + c_0
-        upper_1 = upper_bound(Q_1) + c_1
-        suboptimal = lower_1 > upper_0
-        optimal = upper_1 < lower_0
-        upper_bound = float("inf") if suboptimal else lower_0 - upper_1 - change_diff
-        lower_bound = -float("inf") if optimal else upper_0 - lower_1 + change_diff
+            lower_00 = lower_bound(Q_00) + c_00
+            lower_01 = lower_bound(Q_01) + c_01
+            lower_10 = lower_bound(Q_10) + c_10
+            upper_11 = upper_bound(Q_11) + c_11
+            lower_or = min(lower_00, lower_01, lower_10)
+
+            suboptimal = lower_11 > min(upper_00, upper_01, upper_10)
+            optimal = upper_11 < min(lower_00, lower_01, lower_10)
+            upper_bound = float('inf') if suboptimal else lower_or - upper_11 - change_diff
+            lower_bound = -float('inf') if optimal else upper_or - lower_11 + change_diff
+        else:
+            # Define sub-qubos
+            Q_0, c_0, _ = Q.clamp({i: 0})
+            Q_1, c_1, _ = Q.clamp({i: 1})
+            # Compute bounds
+            upper_0 = upper_bound(Q_0) + c_0
+            lower_1 = lower_bound(Q_1) + c_1
+
+            lower_0 = lower_bound(Q_0) + c_0
+            upper_1 = upper_bound(Q_1) + c_1
+            suboptimal = lower_1 > upper_0
+            optimal = upper_1 < lower_0
+            upper_bound = float("inf") if suboptimal else lower_0 - upper_1 - change_diff
+            lower_bound = -float("inf") if optimal else upper_0 - lower_1 + change_diff
     return lower_bound, upper_bound
 
 def _compute_pre_opt_bounds_all(Q, **kwargs):
