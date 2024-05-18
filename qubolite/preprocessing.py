@@ -87,6 +87,9 @@ def _compute_pre_opt_bounds(Q, i, j, **kwargs):
         upper_11 = upper_bound(Q_11) + c_11
         lower_or = min(lower_00, lower_01, lower_10)
 
+        #why is this correct?
+        #how can I have -\infty and +\infty as bounds when y^- \leq w \leq y^+?
+        #and y^- is never -\infty and y^+ is never +\infty?
         suboptimal = lower_11 > min(upper_00, upper_01, upper_10)
         optimal = upper_11 < min(lower_00, lower_01, lower_10)
         upper_bound = float('inf') if suboptimal else lower_or - upper_11 - change_diff
