@@ -103,13 +103,13 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, **kwargs):
             lower_0 = prev_lowers[0]
             lower_1 = prev_lowers[1]
             if prev_increase:
-                lower_bound = min(0, min(upper_0 + prev_change, upper_1 + prev_change) - lower_1)
-                upper_bound = max(0, min(lower_0, lower_1) - (upper_1 + prev_change))
+                lower_bound = min(0, (upper_0 + prev_change) - lower_1)
+                upper_bound = max(0, lower_0 - (upper_1 + prev_change))
                 prev_calculations["uppers"][0] = upper_0 + prev_change
                 prev_calculations["uppers"][1] = upper_1 + prev_change
             else:
-                lower_bound = min(0, min(upper_0, upper_1) - (lower_1 - prev_change))
-                upper_bound = max(0, min(lower_0 - prev_change, lower_1 - prev_change) - upper_1)
+                lower_bound = min(0, upper_0 - (lower_1 - prev_change))
+                upper_bound = max(0, (lower_0 - prev_change) - upper_1)
                 prev_calculations["lowers"][0] = lower_0 - prev_change
                 prev_calculations["lowers"][1] = lower_1 - prev_change
     else:
@@ -177,7 +177,7 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, **kwargs):
             prev_calculations["uppers"][0] = upper_0
             prev_calculations["uppers"][1] = upper_1 
             prev_calculations["lowers"][0] = lower_0
-            prev_calculations["lowers"][1] = lower_0 
+            prev_calculations["lowers"][1] = lower_1
             
     return lower_bound, upper_bound, prev_calculations
 
