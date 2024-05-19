@@ -30,47 +30,88 @@ def _get_random_index_pair(matrix_order, npr):
         i, j = 0, 0
     return i, j
 
-def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', **bound_params):
+def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all_prev_calculations=dict(), **bound_params):
     if decision == 'random':
         i, j = _get_random_index_pair(matrix_order, npr)
         change = _compute_index_change(matrix_order, i, j, heuristic=heuristic, **bound_params)
     elif decision == 'heuristic':
         order_indices = matrix_order.dynamic_range_impact()
         indices = matrix_order.to_matrix_indices(order_indices, matrix_order.matrix.shape[0])
-        changes = [_compute_index_change(matrix_order, x[0], x[1],
-                                         heuristic=heuristic,
-                                         **bound_params) for x in indices]
-        drs = [_dynamic_range_change(x[0], x[1], changes[index],
-                                     matrix_order) for index, x in enumerate(indices)]
+        changes = list()
+        drs = list()
+        for x in indices:
+            i, j = x
+            if (i,j) in all_prev_calculations.keys():
+                change, calculation = _compute_index_change(matrix_order, i, j,
+                                            heuristic, all_prev_calculations[(i,j)],
+                                            **bound_params)
+            else:
+                change, calculation = _compute_index_change(matrix_order, i, j,
+                                            heuristic, None,
+                                            **bound_params)
+            all_prev_calculations[(i,j)] = calculation
+            changes.append(change)
+
+            drs.append(_dynamic_range_change(i, j, change, matrix_order))
+
         if np.any(drs):
             index = np.argmax(drs)
             i, j = indices[index]
             change = changes[index]
         else:
             i, j = _get_random_index_pair(matrix_order, npr)
-            change = _compute_index_change(matrix_order, i, j,
+            change, calculation = _compute_index_change(matrix_order, i, j,
                                            heuristic=heuristic,
                                            **bound_params)
+            all_prev_calculations[(i,j)] = calculation
     else:
         raise NotImplementedError
-    return i, j, change
+    return i, j, change, all_prev_calculations
 
 def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, **kwargs):
     if prev_calculations is not None:
-        prev_change = prev_calculations[0]
-        prev_lowers = prev_calculations[1]
-        prev_uppers = prev_calculations[2]
-        prev_increase = prev_calculations[3]
+        prev_change = prev_calculations["change"]
+        prev_lowers = prev_calculations["lowers"]
+        prev_uppers = prev_calculations["uppers"]
+        prev_increase = prev_calculations["prev_increase"]
         if i != j:
+            upper_00 = prev_uppers[0]
+            upper_01 = prev_uppers[1]
+            upper_10 = prev_uppers[2]
+            upper_11 = prev_uppers[3]
+            lower_00 = prev_lowers[0]
+            lower_01 = prev_lowers[1]
+            lower_10 = prev_lowers[2]
+            lower_11 = prev_lowers[3]
             if prev_increase:
-                pass
+                lower_bound = min(0, min(upper_00 + prev_change, upper_01 + prev_change, upper_10 + prev_change) - lower_11)
+                upper_bound = max(0, min(lower_00, lower_01, lower_10) - (upper_11 + prev_change))
+                prev_calculations["uppers"][0] = upper_00 + prev_change
+                prev_calculations["uppers"][1] = upper_01 + prev_change
+                prev_calculations["uppers"][2] = upper_10 + prev_change
+                prev_calculations["uppers"][3] = upper_11 + prev_change
             else:
-                pass
+                lower_bound = min(0, min(upper_00, upper_01, upper_10) - (lower_11 - prev_change))
+                upper_bound = max(0, min(lower_00 - prev_change, lower_01 - prev_change, lower_10 - prev_change) - upper_11)
+                prev_calculations["lowers"][0] = lower_00 - prev_change
+                prev_calculations["lowers"][1] = lower_01 - prev_change
+                prev_calculations["lowers"][2] = lower_10 - prev_change
+                prev_calculations["lowers"][3] = lower_11 - prev_change
         else:
+            upper_0 = prev_uppers[0]
+            upper_1 = prev_uppers[1]
+            lower_0 = prev_lowers[0]
+            lower_1 = prev_lowers[1]
             if prev_increase:
-                pass
+                lower_bound = min(0, min(upper_0 + prev_change, upper_1 + prev_change) - lower_1)
+                upper_bound = max(0, min(lower_0, lower_1) - (upper_1 + prev_change))
+                prev_calculations["uppers"][0] = upper_0 + prev_change
+                prev_calculations["uppers"][1] = upper_1 + prev_change
             else:
-                pass
+                lower_bound = min(0, min(upper_0, upper_1) - (lower_1 - prev_change))
+                upper_bound = max(0, min(lower_0 - prev_change, lower_1 - prev_change) - upper_1)
+                prev_calculations["lowers"][0] = lower_0 - prev_change
+                prev_calculations["lowers"][1] = lower_1 - prev_change
     else:
         lower_bound = {
             'roof_dual': lb_roof_dual,
@@ -85,6 +126,7 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, **kwargs):
         change_diff = kwargs.get('change_diff', 1e-08)
         Q = qubo(Q)
         if i != j:
+            prev_calculations = {"change": None, "prev_increase": None, "uppers": [0.0,0.0,0.0,0.0], "lowers": [0.0,0.0,0.0,0.0]}
             # Define sub-qubos
             Q_00, c_00, _ = Q.clamp({i: 0, j: 0})
             Q_01, c_01, _ = Q.clamp({i: 0, j: 1})
@@ -107,7 +149,17 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, **kwargs):
             optimal = upper_11 < min(lower_00, lower_01, lower_10)
             upper_bound = float('inf') if suboptimal else lower_or - upper_11 - change_diff
             lower_bound = -float('inf') if optimal else upper_or - lower_11 + change_diff
+
+            prev_calculations["uppers"][0] = upper_00 
+            prev_calculations["uppers"][1] = upper_01 
+            prev_calculations["uppers"][2] = upper_10 
+            prev_calculations["uppers"][3] = upper_11
+            prev_calculations["lowers"][0] = lower_00 
+            prev_calculations["lowers"][1] = lower_01 
+            prev_calculations["lowers"][2] = lower_10 
+            prev_calculations["lowers"][3] = lower_11
         else:
+            prev_calculations = {"change": None, "prev_increase": None, "uppers": [0.0,0.0], "lowers": [0.0,0.0]}
             # Define sub-qubos
             Q_0, c_0, _ = Q.clamp({i: 0})
             Q_1, c_1, _ = Q.clamp({i: 1})
@@ -121,7 +173,13 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, **kwargs):
             optimal = upper_1 < lower_0
             upper_bound = float("inf") if suboptimal else lower_0 - upper_1 - change_diff
             lower_bound = -float("inf") if optimal else upper_0 - lower_1 + change_diff
-    return lower_bound, upper_bound
+
+            prev_calculations["uppers"][0] = upper_0
+            prev_calculations["uppers"][1] = upper_1 
+            prev_calculations["lowers"][0] = lower_0
+            prev_calculations["lowers"][1] = lower_0 
+            
+    return lower_bound, upper_bound, prev_calculations
 
 def _compute_pre_opt_bounds_all(Q, **kwargs):
     indices = np.triu_indices(Q.shape[0])
@@ -180,16 +238,18 @@ def _check_to_next_decrease(matrix_order, change, i, j):
     difference = difference | P.singleton(upper_entry)
     return difference.lower - current_entry
 
-def _compute_index_change(matrix_order, i, j, heuristic=None, **kwargs):
+def _compute_index_change(matrix_order, i, j, heuristic=None, prev_calculations=None, **kwargs):
     # Decide whether to increase or decrease
     increase = heuristic.decide_increase(matrix_order, i, j)
     # Bounds on changes based on reducing the dynamic range
     dyn_range_change = heuristic.compute_change(matrix_order, i, j, increase)
     # Bounds on changes based on preserving the optimum
     if increase:
-        _, pre_opt_change = _compute_pre_opt_bounds(matrix_order.matrix, i, j, **kwargs)
+        _, pre_opt_change, prev_calculations = _compute_pre_opt_bounds(matrix_order.matrix, i, j, prev_calculations, **kwargs)
+        prev_calculations["prev_increase"] = True
     else:
-        pre_opt_change, _ = _compute_pre_opt_bounds(matrix_order.matrix, i, j, **kwargs)
+        pre_opt_change, _, prev_calculations = _compute_pre_opt_bounds(matrix_order.matrix, i, j, prev_calculations,**kwargs)
+        prev_calculations["prev_increase"] = False
     set_to_zero = heuristic.set_to_zero()
     if increase:
         change = min(pre_opt_change, dyn_range_change)
@@ -207,7 +267,9 @@ def _compute_index_change(matrix_order, i, j, heuristic=None, **kwargs):
             change = - matrix_order.matrix[i, j]
         else:
             change = _check_to_next_decrease(matrix_order, change, i, j)
-    return change
+    
+    prev_calculations["change"] = change
+    return change, prev_calculations
 
 def reduce_dynamic_range(
         Q: qubo,
@@ -256,10 +318,12 @@ def reduce_dynamic_range(
     matrix_order = MatrixOrder(Q_copy.m)
     stop_update = False
     matrix_order.matrix = np.round(matrix_order.matrix, decimals=8)
+    all_prev_calculations = dict()
     for it in range(iterations):
         if not stop_update:
-            i, j, change = _compute_change(matrix_order, heuristic=heuristic, npr=npr,
-                                           decision=decision, **kwargs)
+            i, j, change, all_prev_calculations = _compute_change(matrix_order, heuristic=heuristic,
+                                            npr=npr, decision=decision,
+                                            all_prev_calculations=all_prev_calculations, **kwargs)
             stop_update = matrix_order.update_entry(i, j, change)
             if callback is not None:
                 callback(i, j, change, matrix_order, it)
