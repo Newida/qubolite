@@ -84,15 +84,23 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, **kwargs):
             lower_10 = prev_lowers[2]
             lower_11 = prev_lowers[3]
             if prev_increase:
-                lower_bound = min(0, min(upper_00 + prev_change, upper_01 + prev_change, upper_10 + prev_change) - lower_11)
-                upper_bound = max(0, min(lower_00, lower_01, lower_10) - (upper_11 + prev_change))
+                upper_or = min(upper_00 + prev_change, upper_01 + prev_change, upper_10 + prev_change)
+                lower_or = min(lower_00, lower_01, lower_10)
+                suboptimal = lower_11 > upper_or
+                optimal = upper_11 < lower_or
+                lower_bound = float("inf") if suboptimal else upper_or - lower_11 - change_diff
+                upper_bound = -float("inf") if optimal else  lower_or - (upper_11 + prev_change) + change_diff
                 prev_calculations["uppers"][0] = upper_00 + prev_change
                 prev_calculations["uppers"][1] = upper_01 + prev_change
                 prev_calculations["uppers"][2] = upper_10 + prev_change
                 prev_calculations["uppers"][3] = upper_11 + prev_change
             else:
-                lower_bound = min(0, min(upper_00, upper_01, upper_10) - (lower_11 - prev_change))
-                upper_bound = max(0, min(lower_00 - prev_change, lower_01 - prev_change, lower_10 - prev_change) - upper_11)
+                upper_or = min(upper_00, upper_01, upper_10)
+                lower_or = min(lower_00 - prev_change, lower_01 - prev_change, lower_10 - prev_change)
+                suboptimal = lower_11 > upper_or
+                optimal = upper_11 < lower_or
+                lower_bound = float("inf") if suboptimal else upper_or - (lower_11 - prev_change) - change_diff
+                upper_bound = -float("inf") if optimal else  lower_or - upper_11 + change_diff
                 prev_calculations["lowers"][0] = lower_00 - prev_change
                 prev_calculations["lowers"][1] = lower_01 - prev_change
                 prev_calculations["lowers"][2] = lower_10 - prev_change
@@ -103,13 +111,22 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, **kwargs):
             lower_0 = prev_lowers[0]
             lower_1 = prev_lowers[1]
             if prev_increase:
-                lower_bound = min(0, (upper_0 + prev_change) - lower_1)
-                upper_bound = max(0, lower_0 - (upper_1 + prev_change))
+                upper_or = (upper_0 + prev_change)
+                lower_or = lower_0 
+                suboptimal = lower_1 > upper_or
+                optimal = upper_1 < lower_or
+                upper_bound = float("inf") if suboptimal else upper_or - lower_1 - change_diff
+                lower_bound = -float("inf") if optimal else lower_or - (upper_1 + prev_change) + change_diff
+
                 prev_calculations["uppers"][0] = upper_0 + prev_change
                 prev_calculations["uppers"][1] = upper_1 + prev_change
             else:
-                lower_bound = min(0, upper_0 - (lower_1 - prev_change))
-                upper_bound = max(0, (lower_0 - prev_change) - upper_1)
+                upper_or = upper_0
+                lower_or = lower_0 - prev_change
+                suboptimal = lower_1 > upper_or
+                optimal = upper_1 < lower_or
+                upper_bound = float("inf") if suboptimal else upper_or - (lower_1 - prev_change) - change_diff
+                lower_bound = -float("inf") if optimal else lower_or - upper_1 + change_diff
                 prev_calculations["lowers"][0] = lower_0 - prev_change
                 prev_calculations["lowers"][1] = lower_1 - prev_change
     else:
