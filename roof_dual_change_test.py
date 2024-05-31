@@ -35,25 +35,52 @@ def to_flow_graph(P):
         return G
 
 def adapt_graph(Q, G, change_idx):
-    #it is assume that i < j
+    #this function assume that i < j
     P, c = Q.to_posiform()
     i, j = change_idx
-    if G.are_connected(0, Q.n + (i+2)):
-        #x_i => edge x_0 not_x_i and x_i not_x_0
-        G.es[G.get_eid(0, Q.n + (i+2))]["capacity"] = P[0, i,i]/2.0
-        G.es[G.get_eid(i+1, Q.n + 1)]["capacity"] = P[0, i,i]/2.0
-    if G.are_connected(0, i+1):
-        #not_x_i => edge x_0 x_i and not_x_i not_x_0
-        G.es[G.get_eid(0, i+1)]["capacity"] = P[1, i,i]/2.0
-        G.es[G.get_eid(Q.n + (i+2), Q.n + 1)]["capacity"] = P[1, i,i]/2.0
-    if G.are_connected(i+1, Q.n + (j+2)):
-        #x_i x_j => edge x_i not_x_j and x_j not_x_i
-        G.es[G.get_eid(i+1, Q.n + (j+2))]["capacity"] = P[0, i,j]/2.0
-        G.es[G.get_eid(j+1, Q.n + (i+2))]["capacity"] = P[0, i,j]/2.0
-    if G.are_connected(i+1, j+1):
-        #x_i not_x_j => edge x_i x_j and not_x_j not_x_i
-        G.es[G.get_eid(i+1, j+1)]["capacity"] = P[1, i,j]/2.0
-        G.es[G.get_eid(Q.n + (j+2), Q.n + (i+2))]["capacity"] = P[1, i,j]/2.0
+
+    #x_i => edge x_0 not_x_i and x_i not_x_0
+    if not G.are_connected(0, Q.n + (i+2)):
+        G.add_edge(0, Q.n + (i+2))
+        G.add_edge((i+1), Q.n + 1)
+    G.es[G.get_eid(0, Q.n + (i+2))]["capacity"] = P[0, i,i]/2.0
+    G.es[G.get_eid(i+1, Q.n + 1)]["capacity"] = P[0, i,i]/2.0
+
+    #not_x_i => edge x_0 x_i and not_x_i not_x_0
+    if not G.are_connected(0, i+1):
+        G.add_edge(0, (i+1))
+        G.add_edge(Q.n + (i+2), Q.n + 1)
+    G.es[G.get_eid(0, i+1)]["capacity"] = P[1, i,i]/2.0
+    G.es[G.get_eid(Q.n + (i+2), Q.n + 1)]["capacity"] = P[1, i,i]/2.0
+
+    #x_i x_j => edge x_i not_x_j and x_j not_x_i
+    if not G.are_connected(i+1, Q.n + (j+2)):
+        G.add_edge((i+1), Q.n + (j+2))
+        G.add_edge((j+1), Q.n + (i+2))    
+    G.es[G.get_eid(i+1, Q.n + (j+2))]["capacity"] = P[0, i,j]/2.0
+    G.es[G.get_eid(j+1, Q.n + (i+2))]["capacity"] = P[0, i,j]/2.0
+
+    #x_i not_x_j => edge x_i x_j and not_x_j not_x_i
+    if not G.are_connected(i+1, j+1):
+        G.add_edge((i+1), (j+1))
+        G.add_edge(Q.n + (j+2), Q.n + (i+2))
+    G.es[G.get_eid(i+1, j+1)]["capacity"] = P[1, i,j]/2.0
+    G.es[G.get_eid(Q.n + (j+2), Q.n + (i+2))]["capacity"] = P[1, i,j]/2.0
+    
+    #not_x_i x_j => edge not_x_i not_x_j and x_j x_i
+    if not G.are_connected(Q.n + (i+2), Q.n + (j+2)):
+        G.add_edge(Q.n + (i+2), Q.n + (j+2))
+        G.add_edge((j+1), (i+1))
+    G.es[G.get_eid(Q.n + (i+2), Q.n + (j+2))]["capacity"] = P[1, i,j]/2.0
+    G.es[G.get_eid((j+1), (i+1))]["capacity"] = P[1, i,j]/2.0
+
+
+    #not_x_i not_x_j => edge not_x_i x_j and x_j not_x_i
+    if not G.are_connected(Q.n + (i+2), j):
+        G.add_edge(Q.n + (i+2), j)
+        G.add_edge(Q.n + (j+2), i)
+    G.es[G.get_eid(Q.n + (i+2), j)]["capacity"] = P[1, i,j]/2.0
+    G.es[G.get_eid(Q.n + (j+2), i)]["capacity"] = P[1, i,j]/2.0
 
     return c
 
