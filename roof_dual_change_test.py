@@ -57,31 +57,33 @@ def adapt_graph(Q, G, change_idx):
 
     return c
 
+
+Q = qubo(np.array([[ 0.05755527, -0.88476015, -0.78392966],
+       [ 0.        , -0.38025914, -0.64084856],
+       [ 0.        ,  0.        , -0.5782138 ]]))
 #Q = qubo.random(n=3, distr='uniform', low=-1, high=1)
-Q = qubo(np.array([[ 0.06498978, -0.86825328,  0.02054162],
-       [ 0.        , -0.49789045, -0.12046697],
-       [ 0.        ,  0.        , -0.74605798]]))
 print("Input:", Q)
 P, const = Q.to_posiform()
-print("Posiform:", P)
-print("Constant:", const)
 G = to_flow_graph(P)
 #apply change
-Q.m[0,1] -= 0.5
-print("Changed Q:", Q)
+Q.m[1,2] -= 0.5
 newP, newconst = Q.to_posiform()
-print("Changed Posiform:", newP)
-print("Changed constant:", newconst)
-print("+"*50)
-print("original Graph:")
-for e in G.es:
-    print(e.source, e.target, e["capacity"])
 newC = adapt_graph(Q, G, (0,1))
 newG_truth = to_flow_graph(newP)
-print("+"*50)
-for e in newG_truth.es:
-    print(e.source, e.target, e["capacity"])
-print("+"*50)
-for e in G.es:
-    print(e.source, e.target, e["capacity"])
-print("+"*50)
+d = np.linalg.norm(np.array(newG_truth.es["capacity"]) - np.array(G.es["capacity"]))
+if not np.isclose(d, 0):
+    print("Original Posiform:", P)
+    print("Original graph:")
+    for e in G.es:
+        print(e.source, e.target, e["capacity"])
+    print("+"*50)
+    print("Changed Q:", Q)
+    print("Changed Posiform:", newP)
+    print("Changed graph:")
+    for edge in newG_truth.es:
+         print(edge.source, edge.target, edge["capacity"])
+    print("+"*50)
+    print("my graph:")
+    for edge in G.es:
+        print(edge.source, edge.target, edge["capacity"])
+print("Diff:", d)
