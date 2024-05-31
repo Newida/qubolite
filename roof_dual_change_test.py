@@ -87,10 +87,9 @@ def adapt_graph(Q, G, change_idx):
     return c
 
 
-#Q = qubo(np.array([[ 0.05755527, -0.88476015, -0.78392966],
-#       [ 0.        , -0.38025914, -0.64084856],
-#       [ 0.        ,  0.        , -0.5782138 ]]))
-Q = qubo.random(n=3, distr='uniform', low=-1, high=1)
+Q = qubo(np.array([[-0.55140569, -0.12342533,  0.23540135], [0.0, 0.42593847, -0.5271073 ], [ 0.0,  0.0,  0.73102285]]))
+
+#Q = qubo.random(n=3, distr='uniform', low=-1, high=1)
 print("Input:", Q)
 P, const = Q.to_posiform()
 G = to_flow_graph(P)
@@ -100,7 +99,8 @@ Q.m[i,j] -= 0.5
 newP, newconst = Q.to_posiform()
 newC = adapt_graph(Q, G, (i,j))
 newG_truth = to_flow_graph(newP)
-d = np.linalg.norm(np.array(newG_truth.es["capacity"]) - np.array(G.es["capacity"]))
+#d = np.linalg.norm(np.array(newG_truth.es["capacity"]) - np.array(G.es["capacity"]))
+d = 10
 if not np.isclose(d, 0):
     print("Original Posiform:", P)
     print("Original graph:")
