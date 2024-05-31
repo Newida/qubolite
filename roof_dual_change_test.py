@@ -35,6 +35,8 @@ def to_flow_graph(P):
         return G
 
 def adapt_graph(Q, G, change_idx):
+    #TOOD: are_connected does not check for direction
+    #therefore implement a solution that includes direction
     #this function assume that i < j
     P, c = Q.to_posiform()
     i, j = change_idx
