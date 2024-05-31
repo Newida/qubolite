@@ -43,11 +43,11 @@ def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all
             i, j = x
             if (i,j) in all_prev_calculations.keys():
                 change, calculation = _compute_index_change(matrix_order, i, j,
-                                            heuristic, all_prev_calculations[(i,j)], all_prev_calculations["change"],
+                                            heuristic, all_prev_calculations[(i,j)], all_prev_calculations["change"], all_prev_calculations["prev_changed_indices"]
                                             **bound_params)
             else:
                 change, calculation = _compute_index_change(matrix_order, i, j,
-                                            heuristic, None, None,
+                                            heuristic, None, None, None
                                             **bound_params)
             all_prev_calculations[(i,j)] = calculation
             changes.append(change)
@@ -68,7 +68,7 @@ def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all
         raise NotImplementedError
     return i, j, change, all_prev_calculations
 
-def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, **kwargs):
+def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, prev_changed_indices=None, **kwargs):
     lower_bound = {
             'roof_dual': lb_roof_dual,
             'min_sum': lb_negative_parameters
@@ -90,33 +90,36 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, *
             upper_01 = prev_uppers[1]
             upper_10 = prev_uppers[2]
             upper_11 = prev_uppers[3]
-            lower_00 = prev_lowers[0]
-            lower_01 = prev_lowers[1]
-            lower_10 = prev_lowers[2]
-            lower_11 = prev_lowers[3]
-            if prev_increase:
-                upper_or = min(upper_00 + prev_change, upper_01 + prev_change, upper_10 + prev_change)
-                lower_or = min(lower_00, lower_01, lower_10)
-                suboptimal = lower_11 > upper_or
-                optimal = upper_11 < lower_or
-                lower_bound = float("inf") if suboptimal else upper_or - lower_11 - change_diff
-                upper_bound = -float("inf") if optimal else  lower_or - (upper_11 + prev_change) + change_diff
-                prev_calculations["uppers"][0] = upper_00 + prev_change
-                prev_calculations["uppers"][1] = upper_01 + prev_change
-                prev_calculations["uppers"][2] = upper_10 + prev_change
-                prev_calculations["uppers"][3] = upper_11 + prev_change
-            else:
-                upper_or = min(upper_00, upper_01, upper_10)
-                lower_or = min(lower_00 + prev_change, lower_01 + prev_change, lower_10 + prev_change)
-                suboptimal = lower_11 > upper_or
-                optimal = upper_11 < lower_or
-                lower_bound = float("inf") if suboptimal else upper_or + (lower_11 - prev_change) - change_diff
-                upper_bound = -float("inf") if optimal else  lower_or + upper_11 + change_diff
-                prev_calculations["lowers"][0] = lower_00 + prev_change
-                prev_calculations["lowers"][1] = lower_01 + prev_change
-                prev_calculations["lowers"][2] = lower_10 + prev_change
-                prev_calculations["lowers"][3] = lower_11 + prev_change
+            if u_00[prev_changed_indices[0]] + u_00[prev_changed_indices[1]] == 2:
+                upper_00 = prev_uppers[0] + prev_change
+            if u_01[prev_changed_indices[0]] + u_01[prev_changed_indices[1]] == 2:
+                upper_01 = prev_uppers[1] + prev_change
+            if u_10[prev_changed_indices[0]] + u_10[prev_changed_indices[1]] == 2:
+                upper_10 = prev_uppers[2] + prev_change
+            if u_11[prev_changed_indices[0]] + u_11[prev_changed_indices[1]] == 2:
+                upper_11 = prev_uppers[3] + prev_change
+
+            #TODO: adapt lower_bounds
+            #keeping the graph and changing only one value in it if lb_roof_dual
+            #what about the other possibility?
+            if lower_bound == lb_roof_dual:
+                pass
+            
+            upper_or = min(upper_00, upper_01, upper_10)
+            lower_or = min(lower_00, lower_01, lower_10)
+            suboptimal = lower_11 > min(upper_00, upper_01, upper_10)
+            optimal = upper_11 < min(lower_00, lower_01, lower_10)
+            upper_bound = float('inf') if suboptimal else lower_or - upper_11 - change_diff
+            lower_bound = -float('inf') if optimal else upper_or - lower_11 + change_diff
+
+            prev_calculations["uppers"][0] = upper_00 
+            prev_calculations["uppers"][1] = upper_01 
+            prev_calculations["uppers"][2] = upper_10 
+            prev_calculations["uppers"][3] = upper_11
+            
+
         else:
+            #TODO: change just as the case i \neq j
             upper_0 = prev_uppers[0]
             upper_1 = prev_uppers[1]
             lower_0 = prev_lowers[0]
@@ -142,23 +145,23 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, *
                 prev_calculations["lowers"][1] = lower_1 + prev_change
     else:
         if i != j:
-            prev_calculations = {"prev_increase": None, "uppers": [0.0,0.0,0.0,0.0], "lowers": [0.0,0.0,0.0,0.0]}
+            prev_calculations = {"prev_increase": None, "uppers": [0.0,0.0,0.0,0.0], "lowers": [0.0,0.0,0.0,0.0], "upper_sample": [0, 0, 0, 0]}
             # Define sub-qubos
             Q_00, c_00, _ = Q.clamp({i: 0, j: 0})
             Q_01, c_01, _ = Q.clamp({i: 0, j: 1})
             Q_10, c_10, _ = Q.clamp({i: 1, j: 0})
             Q_11, c_11, _ = Q.clamp({i: 1, j: 1})
             # compute bounds
-            upper_00 = upper_bound(Q_00) + c_00
-            upper_01 = upper_bound(Q_01) + c_01
-            upper_10 = upper_bound(Q_10) + c_10
+            u_00, upper_00 = upper_bound(Q_00) + c_00
+            u_01, upper_01 = upper_bound(Q_01) + c_01
+            u_10, upper_10 = upper_bound(Q_10) + c_10
             lower_11 = lower_bound(Q_11) + c_11
             upper_or = min(upper_00, upper_01, upper_10)
 
             lower_00 = lower_bound(Q_00) + c_00
             lower_01 = lower_bound(Q_01) + c_01
             lower_10 = lower_bound(Q_10) + c_10
-            upper_11 = upper_bound(Q_11) + c_11
+            u_11, upper_11 = upper_bound(Q_11) + c_11
             lower_or = min(lower_00, lower_01, lower_10)
 
             suboptimal = lower_11 > min(upper_00, upper_01, upper_10)
@@ -174,17 +177,22 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, *
             prev_calculations["lowers"][1] = lower_01 
             prev_calculations["lowers"][2] = lower_10 
             prev_calculations["lowers"][3] = lower_11
+
+            prev_calculations["upper_sample"][0] = u_00 
+            prev_calculations["upper_sample"][1] = u_01 
+            prev_calculations["upper_sample"][2] = u_10 
+            prev_calculations["upper_sample"][3] = u_11
         else:
-            prev_calculations = {"prev_increase": None, "uppers": [0.0,0.0], "lowers": [0.0,0.0]}
+            prev_calculations = {"prev_increase": None, "uppers": [0.0,0.0], "lowers": [0.0,0.0], "upper_sample": [0, 0]}
             # Define sub-qubos
             Q_0, c_0, _ = Q.clamp({i: 0})
             Q_1, c_1, _ = Q.clamp({i: 1})
             # Compute bounds
-            upper_0 = upper_bound(Q_0) + c_0
+            u_0, upper_0 = upper_bound(Q_0) + c_0
             lower_1 = lower_bound(Q_1) + c_1
 
             lower_0 = lower_bound(Q_0) + c_0
-            upper_1 = upper_bound(Q_1) + c_1
+            u_1, upper_1 = upper_bound(Q_1) + c_1
             suboptimal = lower_1 > upper_0
             optimal = upper_1 < lower_0
             upper_bound = float("inf") if suboptimal else lower_0 - upper_1 - change_diff
@@ -194,6 +202,9 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, *
             prev_calculations["uppers"][1] = upper_1 
             prev_calculations["lowers"][0] = lower_0
             prev_calculations["lowers"][1] = lower_1
+
+            prev_calculations["upper_sample"][0] = u_0 
+            prev_calculations["upper_sample"][1] = u_1 
             
     return lower_bound, upper_bound, prev_calculations
 
@@ -254,17 +265,17 @@ def _check_to_next_decrease(matrix_order, change, i, j):
     difference = difference | P.singleton(upper_entry)
     return difference.lower - current_entry
 
-def _compute_index_change(matrix_order, i, j, heuristic=None, prev_calculations=None, prev_change=None, **kwargs):
+def _compute_index_change(matrix_order, i, j, heuristic=None, prev_calculations=None, prev_change=None, prev_changed_indices=None, **kwargs):
     # Decide whether to increase or decrease
     increase = heuristic.decide_increase(matrix_order, i, j)
     # Bounds on changes based on reducing the dynamic range
     dyn_range_change = heuristic.compute_change(matrix_order, i, j, increase)
     # Bounds on changes based on preserving the optimum
     if increase:
-        _, pre_opt_change, prev_calculations = _compute_pre_opt_bounds(matrix_order.matrix, i, j, prev_calculations, prev_change, **kwargs)
+        _, pre_opt_change, prev_calculations = _compute_pre_opt_bounds(matrix_order.matrix, i, j, prev_calculations, prev_change, prev_changed_indices, **kwargs)
         prev_calculations["prev_increase"] = True
     else:
-        pre_opt_change, _, prev_calculations = _compute_pre_opt_bounds(matrix_order.matrix, i, j, prev_calculations, prev_change, **kwargs)
+        pre_opt_change, _, prev_calculations = _compute_pre_opt_bounds(matrix_order.matrix, i, j, prev_calculations, prev_change, prev_changed_indices, **kwargs)
         prev_calculations["prev_increase"] = False
     prev_calculations["dr_change"] = dyn_range_change
     prev_calculations["opt_change"] = pre_opt_change
@@ -341,13 +352,15 @@ def reduce_dynamic_range(
     all_prev_calculations = dict()
     for it in range(iterations):
         if not stop_update:
-            if it % 3 == 0:
+            if it % 10 == 0:
+                #resetting memory to calculate new bounds
                 all_prev_calculations = dict()
             i, j, change, all_prev_calculations = _compute_change(matrix_order, heuristic=heuristic,
                                             npr=npr, decision=decision,
                                             all_prev_calculations=all_prev_calculations, **kwargs)
             stop_update = matrix_order.update_entry(i, j, change)
             all_prev_calculations["change"] = change
+            all_prev_calculations["prev_changed_indices"] = (i, j)
             del all_prev_calculations[(i,j)]
             if callback is not None:
                 callback(i, j, change, matrix_order, it)

@@ -5,7 +5,7 @@ from .qubo    import qubo
 from .solving import random_search, local_descent
 
 
-def lb_roof_dual(Q: qubo):
+def lb_roof_dual(Q: qubo, G=None):
     """Compute the Roof Dual bound, as described in `[1] <https://www.researchgate.net/publication/238379061_Preprocessing_of_unconstrained_quadratic_binary_optimization>`__.
     To this end, the QUBO instance is converted to a
     corresponding flow network, whose maximum flow value
@@ -21,15 +21,33 @@ def lb_roof_dual(Q: qubo):
     Returns:
         float: A lower bound on the minimal energy value.
     """
-    try:
-        from igraph import Graph
-    except ImportError as e:
-        raise ImportError(
-            "igraph needs to be installed prior to running qubolite.lb_roof_dual(). You can "
-            "install igraph with:\n'pip install igraph'"
-        ) from e
+    P, const = Q.to_posiform()
+    if G is None:
+        G, capacities = _to_flow_graph(P)
+    v = G.maxflow_value(0, Q.n + 1, capacity=list(capacities))
+    return const + v
 
-    def to_flow_graph(P):
+def _to_flow_graph(P):
+        """
+        Compute the flow graph of the QUBO, as described in `[1] <https://www.researchgate.net/publication/238379061_Preprocessing_of_unconstrained_quadratic_binary_optimization>`__.
+
+        Args:
+        P (nd.array): posiform instance. From Q.to_posiform()
+
+        Raises:
+            ImportError: Raised if the ``igraph`` package is missing.
+                This package is required for this method.
+
+        Returns:
+            A flow graph (igraph.Graph) and the capacities of the edges (numpy.ndarray)
+        """
+        try:
+            from igraph import Graph
+        except ImportError as e:
+            raise ImportError(
+                "igraph needs to be installed prior to running qubolite.lb_roof_dual(). You can "
+                "install igraph with:\n'pip install igraph'"
+            ) from e
         n = P.shape[1]
         G = Graph(directed=True)
         vertices = np.arange(n + 1)
@@ -59,11 +77,6 @@ def lb_roof_dual(Q: qubo):
                                 n0_n1[neg_indices], nn1_nn0[neg_indices]])
         G.add_edges(edges)
         return G, capacities
-
-    P, const = Q.to_posiform()
-    G, capacities = to_flow_graph(P)
-    v = G.maxflow_value(0, Q.n + 1, capacity=list(capacities))
-    return const + v
 
 
 def lb_negative_parameters(Q: qubo):
@@ -95,10 +108,11 @@ def ub_sample(Q: qubo, samples=10_000, random_state=None):
         random_state (optional): A numerical or lexical seed, or a NumPy random generator. Defaults to None.
 
     Returns:
-        float: An upper bound on the minimal energy value.
+        A tuple containing the bit vector (numpy.ndarray) with lowest energy
+        found, and its energy (float)
     """
-    _, v = random_search(Q, steps=samples, random_state=random_state)
-    return v
+    x, v = random_search(Q, steps=samples, random_state=random_state)
+    return x, v
 
 
 def ub_local_descent(Q: qubo, restarts=10, random_state=None):
@@ -113,11 +127,15 @@ def ub_local_descent(Q: qubo, restarts=10, random_state=None):
         random_state (optional): A numerical or lexical seed, or a NumPy random generator. Defaults to None.
 
     Returns:
-        float: An upper bound on the minimal energy value.
+        A tuple containing the bit vector (numpy.ndarray) with lowest energy
+        found, and its energy (float)
     """
     npr = get_random_state(random_state)
     min_val = float('inf')
+    x_min = None
     for _ in range(restarts):
-        _, v = local_descent(Q, random_state=npr)
-        min_val = min(min_val, v)
-    return min_val
+        x, v = local_descent(Q, random_state=npr)
+        if v < min_val:
+            min_val = v
+            x_min = x
+    return x_min, min_val
