@@ -133,7 +133,7 @@ if not np.isclose(d, 0):
         print(edge.source, edge.target, edge["capacity"])
 print("Diff:", d)
 
-def test_adapt_graph(n, num=1000):
+def test_adapt_graph(n, num=10000):
     for i in tqdm(range(num)):
         Q_orig = qubo.random(n=n, distr='uniform', low=-1, high=1)
         P, _ = Q_orig.to_posiform()
@@ -159,17 +159,18 @@ def test_adapt_graph(n, num=1000):
             print("change:", change)
             print("Diff:", d)
             return G_adapted, newG_truth
+    return None, None
 
-"""
-G_adapted, newG_truth = test_adapt_graph(4)
-print("+"*50)
-print("TRUTH:")
-for edge in newG_truth.es:
-    print(edge.source, edge.target, edge["capacity"])
-print("ADAPTED:")
-for edge in G_adapted.es:
-    print(edge.source, edge.target, edge["capacity"])
-print("+"*50)
+for i in range(40):
+    G_adapted, newG_truth = test_adapt_graph(4)
+    if not G_adapted is None:
+        print("+"*50)
+        print("TRUTH:")
+        for edge in newG_truth.es:
+            print(edge.source, edge.target, edge["capacity"])
+        print("ADAPTED:")
+        for edge in G_adapted.es:
+            print(edge.source, edge.target, edge["capacity"])
+        print("+"*50)
 
-print(compare_graphs(G_adapted, newG_truth))
-"""
+        print(compare_graphs(G_adapted, newG_truth))
