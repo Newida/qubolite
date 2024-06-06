@@ -34,61 +34,68 @@ def to_flow_graph(P):
         G.es["capacity"] = capacities
         return G
 
-def adapt_graph(Q, G, change_idx):
-    #TOOD: are_connected does not check for direction
-    #therefore implement a solution that includes direction
+def adapt_graph(Q, G_orig, change_idx):
+    G = G_orig.copy()
     #this function assume that i < j
     P, c = Q.to_posiform()
     i, j = change_idx
 
     #x_i => edge x_0 not_x_i and x_i not_x_0
+    a = 0
+    b = Q.n + (i+2)
+    c = (i+1)
+    d = Q.n + 1
     if not G.are_connected(0, Q.n + (i+2)):
-        G.add_edge(0, Q.n + (i+2))
-        G.add_edge((i+1), Q.n + 1)
-    G.es[G.get_eid(0, Q.n + (i+2))]["capacity"] = P[0, i,i]/2.0
-    G.es[G.get_eid(i+1, Q.n + 1)]["capacity"] = P[0, i,i]/2.0
+        if P[0, i,i] != 0:
+            G.add_edge(0, Q.n + (i+2), capacity=P[0, i,i]/2.0)
+            G.add_edge((i+1), Q.n + 1, capacity=P[0, i,i]/2.0)
+    else:
+        G.es[G.get_eid(0, Q.n + (i+2))]["capacity"] = P[0, i,i]/2.0
+        G.es[G.get_eid(i+1, Q.n + 1)]["capacity"] = P[0, i,i]/2.0
 
     #not_x_i => edge x_0 x_i and not_x_i not_x_0
+    a = 0
+    b = i+1
+    c = Q.n + (i+2)
+    d = Q.n + 1
     if not G.are_connected(0, i+1):
-        G.add_edge(0, (i+1))
-        G.add_edge(Q.n + (i+2), Q.n + 1)
-    G.es[G.get_eid(0, i+1)]["capacity"] = P[1, i,i]/2.0
-    G.es[G.get_eid(Q.n + (i+2), Q.n + 1)]["capacity"] = P[1, i,i]/2.0
+        if P[1, i,i]/2.0 != 0:
+            G.add_edge(0, (i+1), capacity=P[1, i,i]/2.0)
+            G.add_edge(Q.n + (i+2), Q.n + 1, capacity=P[1, i,i]/2.0)
+    else:
+        G.es[G.get_eid(0, i+1)]["capacity"] = P[1, i,i]/2.0
+        G.es[G.get_eid(Q.n + (i+2), Q.n + 1)]["capacity"] = P[1, i,i]/2.0
 
     #x_i x_j => edge x_i not_x_j and x_j not_x_i
+    a = i+1
+    b = Q.n + (j+2)
+    c = (j+1)
+    d = Q.n + (i+2)
     if not G.are_connected(i+1, Q.n + (j+2)):
-        G.add_edge((i+1), Q.n + (j+2))
-        G.add_edge((j+1), Q.n + (i+2))    
-    G.es[G.get_eid(i+1, Q.n + (j+2))]["capacity"] = P[0, i,j]/2.0
-    G.es[G.get_eid(j+1, Q.n + (i+2))]["capacity"] = P[0, i,j]/2.0
+        if P[0, i,j]/2.0 != 0:
+            G.add_edge((i+1), Q.n + (j+2), capacity=P[0, i,j]/2.0)
+            G.add_edge((j+1), Q.n + (i+2), capacity=P[0, i,j]/2.0)
+    else:
+        G.es[G.get_eid(i+1, Q.n + (j+2))]["capacity"] = P[0, i,j]/2.0
+        G.es[G.get_eid(j+1, Q.n + (i+2))]["capacity"] = P[0, i,j]/2.0
 
     #x_i not_x_j => edge x_i x_j and not_x_j not_x_i
-    if not G.are_connected(i+1, j+1):
-        G.add_edge((i+1), (j+1))
-        G.add_edge(Q.n + (j+2), Q.n + (i+2))
-    G.es[G.get_eid(i+1, j+1)]["capacity"] = P[1, i,j]/2.0
-    G.es[G.get_eid(Q.n + (j+2), Q.n + (i+2))]["capacity"] = P[1, i,j]/2.0
-    
-    #not_x_i x_j => edge not_x_i not_x_j and x_j x_i
-    if not G.are_connected(Q.n + (i+2), Q.n + (j+2)):
-        G.add_edge(Q.n + (i+2), Q.n + (j+2))
-        G.add_edge((j+1), (i+1))
-    G.es[G.get_eid(Q.n + (i+2), Q.n + (j+2))]["capacity"] = P[1, i,j]/2.0
-    G.es[G.get_eid((j+1), (i+1))]["capacity"] = P[1, i,j]/2.0
-
-
-    #not_x_i not_x_j => edge not_x_i x_j and x_j not_x_i
+    a = (i+1)
+    b = j+1
+    c = Q.n + (j+2)
+    d = Q.n + i+2
     if not G.are_connected(Q.n + (i+2), j):
-        G.add_edge(Q.n + (i+2), j)
-        G.add_edge(Q.n + (j+2), i)
-    G.es[G.get_eid(Q.n + (i+2), j)]["capacity"] = P[1, i,j]/2.0
-    G.es[G.get_eid(Q.n + (j+2), i)]["capacity"] = P[1, i,j]/2.0
+        if P[1, i,j]/2.0 != 0:
+            G.add_edge((i+1), (j+1), capacity=P[1, i,j]/2.0)
+            G.add_edge(Q.n + (j+2), Q.n + (i+2), capacity=P[1, i,j]/2.0)
+    else:
+        G.es[G.get_eid((i+1), (j+1))]["capacity"] = P[1, i,j]/2.0
+        G.es[G.get_eid(Q.n + (j+2), Q.n + (i+2))]["capacity"] = P[1, i,j]/2.0
 
-    return c
+    return G, c
 
 
 Q = qubo(np.array([[-0.55140569, -0.12342533,  0.23540135], [0.0, 0.42593847, -0.5271073 ], [ 0.0,  0.0,  0.73102285]]))
-
 #Q = qubo.random(n=3, distr='uniform', low=-1, high=1)
 print("Input:", Q)
 P, const = Q.to_posiform()
@@ -97,8 +104,11 @@ G = to_flow_graph(P)
 i, j = 0, 2
 Q.m[i,j] -= 0.5
 newP, newconst = Q.to_posiform()
-newC = adapt_graph(Q, G, (i,j))
 newG_truth = to_flow_graph(newP)
+print(newP)
+for edge in newG_truth.es:
+    print(edge.source, edge.target, edge["capacity"])
+G_adapted, _ = adapt_graph(Q, G, (i,j))
 #d = np.linalg.norm(np.array(newG_truth.es["capacity"]) - np.array(G.es["capacity"]))
 d = 10
 if not np.isclose(d, 0):
@@ -114,6 +124,6 @@ if not np.isclose(d, 0):
          print(edge.source, edge.target, edge["capacity"])
     print("+"*50)
     print("my graph:")
-    for edge in G.es:
+    for edge in G_adapted.es:
         print(edge.source, edge.target, edge["capacity"])
 print("Diff:", d)
