@@ -9,7 +9,8 @@ from .bounds import (
     lb_roof_dual,
     lb_negative_parameters,
     ub_local_descent,
-    ub_sample)
+    ub_sample,
+    _to_flow_graph)
 
 from ._heuristics import MatrixOrder, HEURISTICS
 from ._misc       import get_random_state
@@ -70,7 +71,7 @@ def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all
 
 def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, prev_changed_indices=None, **kwargs):
     lower_bound = {
-            'roof_dual': lb_roof_dual,
+            'roof_dual': _roof_dual_change,
             'min_sum': lb_negative_parameters
         }[kwargs.get('lower_bound', 'roof_dual')]
     upper_bound = {
@@ -86,25 +87,44 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
         prev_uppers = prev_calculations["uppers"]
         prev_increase = prev_calculations["prev_increase"]
         if i != j:
+            old_i = prev_changed_indices[0]
+            old_j = prev_changed_indices[1]
+            #updating the upper bounds to the change
             upper_00 = prev_uppers[0]
             upper_01 = prev_uppers[1]
             upper_10 = prev_uppers[2]
             upper_11 = prev_uppers[3]
-            if u_00[prev_changed_indices[0]] + u_00[prev_changed_indices[1]] == 2:
-                upper_00 = prev_uppers[0] + prev_change
-            if u_01[prev_changed_indices[0]] + u_01[prev_changed_indices[1]] == 2:
-                upper_01 = prev_uppers[1] + prev_change
-            if u_10[prev_changed_indices[0]] + u_10[prev_changed_indices[1]] == 2:
-                upper_10 = prev_uppers[2] + prev_change
-            if u_11[prev_changed_indices[0]] + u_11[prev_changed_indices[1]] == 2:
-                upper_11 = prev_uppers[3] + prev_change
 
-            #TODO: adapt lower_bounds
-            #keeping the graph and changing only one value in it if lb_roof_dual
-            #what about the other possibility?
-            if lower_bound == lb_roof_dual:
-                pass
-            
+            u_00 = prev_calculations["upper_sample"][0]
+            u_01 = prev_calculations["upper_sample"][1]
+            u_10 = prev_calculations["upper_sample"][2]
+            u_11 = prev_calculations["upper_sample"][3]
+            if u_00[old_i] + u_00[old_j] == 2:
+                upper_00 = upper_00 + prev_change
+            if u_01[old_i] + u_01[old_j] == 2:
+                upper_01 = upper_01 + prev_change
+            if u_10[old_i] + u_10[old_j] == 2:
+                upper_10 = upper_10 + prev_change
+            if u_11[old_i] + u_11[old_j] == 2:
+                upper_11 = upper_11 + prev_change
+
+            #updating the lower bounds to the change
+            if lower_bound == _roof_dual_change:
+                G = prev_calculations["lower_graph"]
+                #incorporate the change into the graph
+                G, _ = _adapt_graph(Q, G, (old_i, old_j))
+                #safe the new graph
+                prev_calculations["lower_graph"] = G
+                #clamp i=0, j=0
+                lower_00 = _clamp_graph(Q, G, old_i, old_j)
+                #clamp i=0, j=1
+                lower_01 = _clamp_graph(Q, G, old_i, old_j)
+                #clamp i=1, j=0
+                lower_10 = _clamp_graph(Q, G, old_i, old_j)
+                #clamp i=1, j=1
+                lower_11 = _clamp_graph(Q, G, old_i, old_j)
+                
+            #calculating bounds for the change
             upper_or = min(upper_00, upper_01, upper_10)
             lower_or = min(lower_00, lower_01, lower_10)
             suboptimal = lower_11 > min(upper_00, upper_01, upper_10)
@@ -112,18 +132,33 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             upper_bound = float('inf') if suboptimal else lower_or - upper_11 - change_diff
             lower_bound = -float('inf') if optimal else upper_or - lower_11 + change_diff
 
+            #saving the new bounds
             prev_calculations["uppers"][0] = upper_00 
             prev_calculations["uppers"][1] = upper_01 
             prev_calculations["uppers"][2] = upper_10 
             prev_calculations["uppers"][3] = upper_11
             
-
+            if lower_bound == _roof_dual_change:
+                prev_calculations["lowers"][0] = lower_00 
+                prev_calculations["lowers"][1] = lower_01 
+                prev_calculations["lowers"][2] = lower_10 
+                prev_calculations["lowers"][3] = lower_11
+                
         else:
             #TODO: change just as the case i \neq j
+            old_i = prev_changed_indices[0]
+            #updating the upper bounds to the change
             upper_0 = prev_uppers[0]
             upper_1 = prev_uppers[1]
             lower_0 = prev_lowers[0]
             lower_1 = prev_lowers[1]
+
+            u_0 = prev_calculations["upper_sample"][0]
+            u_1 = prev_calculations["upper_sample"][1]
+            if u_0[old_i] == 1:
+                upper_0 = upper_0 + prev_change
+            if u_1[old_i] == 1:
+                upper_1 = upper_1 + prev_change
             if prev_increase:
                 upper_or = (upper_0 + prev_change)
                 lower_or = lower_0 
@@ -145,7 +180,7 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
                 prev_calculations["lowers"][1] = lower_1 + prev_change
     else:
         if i != j:
-            prev_calculations = {"prev_increase": None, "uppers": [0.0,0.0,0.0,0.0], "lowers": [0.0,0.0,0.0,0.0], "upper_sample": [0, 0, 0, 0]}
+            prev_calculations = {"prev_increase": None, "uppers": [0.0,0.0,0.0,0.0], "lowers": [0.0,0.0,0.0,0.0], "upper_sample": [0, 0, 0, 0], "lower_graph": None}
             # Define sub-qubos
             Q_00, c_00, _ = Q.clamp({i: 0, j: 0})
             Q_01, c_01, _ = Q.clamp({i: 0, j: 1})
@@ -182,6 +217,10 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             prev_calculations["upper_sample"][1] = u_01 
             prev_calculations["upper_sample"][2] = u_10 
             prev_calculations["upper_sample"][3] = u_11
+
+            if lower_bound == _roof_dual_change:
+                P, const = Q.to_posiform()
+                prev_calculations["lower_graph"] = _to_flow_graph(P)
         else:
             prev_calculations = {"prev_increase": None, "uppers": [0.0,0.0], "lowers": [0.0,0.0], "upper_sample": [0, 0]}
             # Define sub-qubos
@@ -207,6 +246,53 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             prev_calculations["upper_sample"][1] = u_1 
             
     return lower_bound, upper_bound, prev_calculations
+
+def _adapt_graph(Q, G_orig, change_idx):
+    G = G_orig.copy()
+    #this function assume that i < j
+    P, c = Q.to_posiform()
+    i, j = change_idx
+    #x_i => edge x_0 not_x_i and x_i not_x_0
+    if not G.are_connected(0, Q.n + (i+2)):
+        if P[0, i,i] != 0:
+            G.add_edge(0, Q.n + (i+2), capacity=P[0, i,i]/2.0)
+            G.add_edge((i+1), Q.n + 1, capacity=P[0, i,i]/2.0)
+    else:
+        G.es[G.get_eid(0, Q.n + (i+2))]["capacity"] = P[0, i,i]/2.0
+        G.es[G.get_eid(i+1, Q.n + 1)]["capacity"] = P[0, i,i]/2.0
+
+    #not_x_i => edge x_0 x_i and not_x_i not_x_0
+    if not G.are_connected(0, i+1):
+        if P[1, i,i]/2.0 != 0:
+            G.add_edge(0, (i+1), capacity=P[1, i,i]/2.0)
+            G.add_edge(Q.n + (i+2), Q.n + 1, capacity=P[1, i,i]/2.0)
+    else:
+        G.es[G.get_eid(0, i+1)]["capacity"] = P[1, i,i]/2.0
+        G.es[G.get_eid(Q.n + (i+2), Q.n + 1)]["capacity"] = P[1, i,i]/2.0
+    if i != j:
+        #x_i x_j => edge x_i not_x_j and x_j not_x_i
+        if not G.are_connected(i+1, Q.n + (j+2)):
+            if P[0, i,j]/2.0 != 0:
+                G.add_edge((i+1), Q.n + (j+2), capacity=P[0, i,j]/2.0)
+                G.add_edge((j+1), Q.n + (i+2), capacity=P[0, i,j]/2.0)
+        else:
+            G.es[G.get_eid(i+1, Q.n + (j+2))]["capacity"] = P[0, i,j]/2.0
+            G.es[G.get_eid(j+1, Q.n + (i+2))]["capacity"] = P[0, i,j]/2.0
+    
+        #x_i not_x_j => edge x_i x_j and not_x_j not_x_i
+        if not G.are_connected((i+1), (j+1)):
+            if P[1, i,j]/2.0 != 0:
+                G.add_edge((i+1), (j+1), capacity=P[1, i,j]/2.0)
+                G.add_edge(Q.n + (j+2), Q.n + (i+2), capacity=P[1, i,j]/2.0)
+        else:
+            G.es[G.get_eid((i+1), (j+1))]["capacity"] = P[1, i,j]/2.0
+            G.es[G.get_eid(Q.n + (j+2), Q.n + (i+2))]["capacity"] = P[1, i,j]/2.0
+    return G, c
+
+def _roof_dual_change(Q, G, change_idx):
+    G, const = _adapt_graph(Q, G, change_idx)
+    v = G.maxflow_value(0, Q.n + 1, capacity="capacity")
+    return const + v
 
 def _compute_pre_opt_bounds_all(Q, **kwargs):
     indices = np.triu_indices(Q.shape[0])

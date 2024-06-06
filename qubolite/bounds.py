@@ -22,9 +22,8 @@ def lb_roof_dual(Q: qubo, G=None):
         float: A lower bound on the minimal energy value.
     """
     P, const = Q.to_posiform()
-    if G is None:
-        G, capacities = _to_flow_graph(P)
-    v = G.maxflow_value(0, Q.n + 1, capacity=list(capacities))
+    G = _to_flow_graph(P)
+    v = G.maxflow_value(0, Q.n + 1, capacity="capacity")
     return const + v
 
 def _to_flow_graph(P):
@@ -76,7 +75,8 @@ def _to_flow_graph(P):
         edges = np.concatenate([n0_nn1[pos_indices], n1_nn0[pos_indices],
                                 n0_n1[neg_indices], nn1_nn0[neg_indices]])
         G.add_edges(edges)
-        return G, capacities
+        G.es["capacity"] = capacities
+        return G
 
 
 def lb_negative_parameters(Q: qubo):

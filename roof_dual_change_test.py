@@ -79,6 +79,9 @@ def adapt_graph(Q, G_orig, change_idx):
 
     return G, c
 
+def clamp_graph(Q, G, change_idx):
+    pass
+
 def compare_graphs(G_adapted, G_truth):
     # Create a set of edges for both graphs
     edges_G1 = set((e.source, e.target) for e in G_adapted.es)
