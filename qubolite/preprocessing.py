@@ -182,6 +182,7 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
         if i != j:
             prev_calculations = {"prev_increase": None, "uppers": [0.0,0.0,0.0,0.0], "lowers": [0.0,0.0,0.0,0.0], "upper_sample": [0, 0, 0, 0], "lower_graph": None}
             # Define sub-qubos
+            #TODO: rewrite clamp by using assignment.partial_assignment expand and apply
             Q_00, c_00, _ = Q.clamp({i: 0, j: 0})
             Q_01, c_01, _ = Q.clamp({i: 0, j: 1})
             Q_10, c_10, _ = Q.clamp({i: 1, j: 0})

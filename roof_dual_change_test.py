@@ -79,8 +79,32 @@ def adapt_graph(Q, G_orig, change_idx):
 
     return G, c
 
-def clamp_graph(Q, G, change_idx):
-    pass
+def clamp_graph(Q, G_orig, change_idx):
+    G = G_orig.copy()
+    #this function assume that i < j
+    i, j = change_idx
+
+    #TODO: this code does not work but includes an idea to how to find the affected edges
+    # Find the edges connected to i or j
+    edges_to_update = set(G.incident(i, mode="all") + G.incident(j, mode="all"))
+    # Update the capacities of the affected edges
+    for edge_id in edges_to_update:
+        edge = G.es[edge_id]
+        source = edge.source
+        target = edge.target
+        
+        # Set capacity to 0 for edges involving i or j
+        if source == i or target == i or source == j or target == j:
+            edge['capacity'] = 0
+        else:
+            # Specific logic for other related edges, if any
+            edge['capacity'] *= 0.8  # Example adjustment factor
+
+    c = ... #use partial assignment to calculate the constant
+    #or do it yourself
+
+    return G, c
+    
 
 def compare_graphs(G_adapted, G_truth):
     # Create a set of edges for both graphs
