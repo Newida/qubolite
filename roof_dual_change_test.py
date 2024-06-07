@@ -83,26 +83,32 @@ def clamp_graph(Q, G_orig, change_idx):
     G = G_orig.copy()
     #this function assume that i < j
     i, j = change_idx
+    #edges from x_0x_i and x_0 not_x_i
+    diag_edges = [(0, Q.n+i+2), (i+1, Q.n+1), (0, i+1), (Q.n+i+2, Q.n+1)]
+    #edges with source x_i
+    x_i_edges = np.tile(i + 1, 2*(2*(Q.n - (i+1)))).reshape(-1, 2)
+    x_i_edges[:Q.n-(i+1), 1] = np.arange(i+2, Q.n+1)
+    x_i_edges[Q.n-(i+1):, 1] = Q.n + np.arange(i+2, Q.n+1)
+    #add edges with target not_x_i
+    not_x_i_edges = np.tile(Q.n+(i+2), 2*(2*(Q.n - (i+1)))).reshape(-1, 2)
+    not_x_i_edges[0, :Q.n-(i+1)] = np.arange(i+2, Q.n+1)
+    not_x_i_edges[0, Q.n-(i+1):] = Q.n + np.arange(i+2, Q.n+1)
 
-    #TODO: this code does not work but includes an idea to how to find the affected edges
-    # Find the edges connected to i or j
-    edges_to_update = set(G.incident(i, mode="all") + G.incident(j, mode="all"))
-    # Update the capacities of the affected edges
-    for edge_id in edges_to_update:
-        edge = G.es[edge_id]
-        source = edge.source
-        target = edge.target
-        
-        # Set capacity to 0 for edges involving i or j
-        if source == i or target == i or source == j or target == j:
-            edge['capacity'] = 0
-        else:
-            # Specific logic for other related edges, if any
-            edge['capacity'] *= 0.8  # Example adjustment factor
+    #convert edges to edge_ids
+    diag_edges_list = G.get_eids(diag_edges, directed=True, error=False)
+    x_i_edges_list = G.get_eids(x_i_edges, directed=True, error=False)
+    not_x_i_edges_list = G.get_eids(not_x_i_edges, directed=True, error=False)
+    #clear edges that do not exist
+    diag_edges_list = list(filter((-1).__ne__, diag_edges_list))
+    x_i_edges_list = list(filter((-1).__ne__, x_i_edges_list))
+    not_x_i_edges_list = list(filter((-1).__ne__, not_x_i_edges_list))
+    #set edge capacities to 0
+    G.es[diag_edges_list]["capacity"] = 0
+    G.es[x_i_edges_list]["capacity"] = 0
+    G.es[not_x_i_edges_list]["capacity"] = 0
 
     c = ... #use partial assignment to calculate the constant
     #or do it yourself
-
     return G, c
     
 
@@ -129,6 +135,7 @@ def compare_graphs(G_adapted, G_truth):
     
     return diff
 
+"""
 Q = qubo(np.array([[-0.0347891 , -0.40028512, -0.68155756,  0.96315303],
        [ 0.        , -0.6173675 ,  0.87557738, -0.47181135],
        [ 0.        ,  0.        , -0.03672531, -0.99585558],
@@ -159,6 +166,7 @@ if not np.isclose(d, 0):
     for edge in G_adapted.es:
         print(edge.source, edge.target, edge["capacity"])
 print("Diff:", d)
+"""
 
 def test_adapt_graph(n, num=10000):
     for i in tqdm(range(num)):
@@ -187,7 +195,7 @@ def test_adapt_graph(n, num=10000):
             print("Diff:", d)
             return G_adapted, newG_truth
     return None, None
-
+"""
 for i in range(40):
     G_adapted, newG_truth = test_adapt_graph(4)
     if not G_adapted is None:
@@ -201,3 +209,34 @@ for i in range(40):
         print("+"*50)
 
         print(compare_graphs(G_adapted, newG_truth))
+"""
+
+Q = qubo(np.array([[-0.0347891 , -0.40028512, -0.68155756,  0.96315303],
+       [ 0.        , -0.6173675 ,  0.87557738, -0.47181135],
+       [ 0.        ,  0.        , -0.03672531, -0.99585558],
+       [ 0.        ,  0.        ,  0.        , -0.69890477]]))
+print("Input:", Q)
+P, const = Q.to_posiform()
+print("Posiform:", P)
+i = 1
+Q.m[i, :] = 0
+print("changedQ: ", Q)
+print("changedPosiform:", Q.to_posiform())
+
+G = to_flow_graph(P)
+for e in G.es:
+    print(e["capacity"])
+edges = np.array([(0, Q.n+i+2), (i+1, Q.n+1), (0, i+1), (Q.n+i+2, Q.n+1)])
+print("N=", Q.n)
+a = np.tile(i + 1, 2*(2*(Q.n - (i+1)))).reshape(-1, 2)
+print(a)
+a[:Q.n-(i+1), 1] = np.arange(i+2, Q.n+1)
+print(a)
+a[Q.n-(i+1):, 1] = Q.n + np.arange(i+2, Q.n+1)
+print(a)
+edge_list = G.get_eids(edges, directed=True, error=False)
+edge_list = list(filter((-1).__ne__, edge_list))
+G.es[edge_list]["capacity"] = 0
+print("+"*20)
+for e in G.es:
+    print(e["capacity"])
