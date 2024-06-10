@@ -79,20 +79,22 @@ def adapt_graph(Q, G_orig, change_idx):
 
     return G, c
 
-def clamp_graph(Q, G_orig, change_idx):
+def clamp_graph(Q, G_orig, change_idx, values):
     G = G_orig.copy()
     #this function assume that i < j
     i, j = change_idx
+    v_i, v_j = values
+    #setting i to 0:
     #edges from x_0x_i and x_0 not_x_i
     diag_edges = [(0, Q.n+i+2), (i+1, Q.n+1), (0, i+1), (Q.n+i+2, Q.n+1)]
     #edges with source x_i
-    x_i_edges = np.tile(i + 1, 2*(2*(Q.n - (i+1)))).reshape(-1, 2)
-    x_i_edges[:Q.n-(i+1), 1] = np.arange(i+2, Q.n+1)
-    x_i_edges[Q.n-(i+1):, 1] = Q.n + np.arange(i+2, Q.n+1)
+    x_i_edges = np.repeat(i + 1, 2*((Q.n-(i+1)) + (2*Q.n + 1) - (Q.n+i+2))).reshape(-1, 2)
+    x_i_edges[:Q.n-(i+1), 1] = np.arange(i+2, (Q.n)+1)
+    x_i_edges[Q.n-(i+1):, 1] = (Q.n + 1) + np.arange(i+2, Q.n+1)
     #add edges with target not_x_i
-    not_x_i_edges = np.tile(Q.n+(i+2), 2*(2*(Q.n - (i+1)))).reshape(-1, 2)
-    not_x_i_edges[0, :Q.n-(i+1)] = np.arange(i+2, Q.n+1)
-    not_x_i_edges[0, Q.n-(i+1):] = Q.n + np.arange(i+2, Q.n+1)
+    not_x_i_edges = np.repeat(Q.n + (i + 2), 2*((Q.n-(i+1)) + (2*Q.n + 1) - (Q.n+i+2))).reshape(-1, 2)
+    not_x_i_edges[:Q.n-(i+1), 0] = np.arange(i+2, Q.n+1)
+    not_x_i_edges[Q.n-(i+1):, 0] = (Q.n + 1) + np.arange(i+2, Q.n+1)
 
     #convert edges to edge_ids
     diag_edges_list = G.get_eids(diag_edges, directed=True, error=False)
@@ -106,16 +108,37 @@ def clamp_graph(Q, G_orig, change_idx):
     G.es[diag_edges_list]["capacity"] = 0
     G.es[x_i_edges_list]["capacity"] = 0
     G.es[not_x_i_edges_list]["capacity"] = 0
+    
+    #setting j to 0:
+    #diagonal elements x_0
+    diag_x_0 = np.zeros((2*n+1,2))
+    diag_x_0[:, 1] = np.arange(1, 2*n+2)
+    #diagonal elements not_x_0
+    diag_not_x_0 = np.repeat(5, 2*(2*n+2)-2).reshape(-1, 2)
+    diag_not_x_0[:, 0] = np.arange(1, 2*n+2)
+    #TODO: non-diagonal elements missing
+    
+    #convert edges to edge_ids
+    diag_x_0_list = G.get_eids(diag_x_0, directed=True, error=False)
+    diag_not_x_0_list = G.get_eids(diag_not_x_0, directed=True, error=False)
+    #clear edges that do not exist
+    diag_x_0_list = list(filter((-1).__ne__, diag_x_0_list))
+    diag_not_x_0_list = list(filter((-1).__ne__, diag_not_x_0_list))
 
-    c = ... #use partial assignment to calculate the constant
+    #set edge capacities
+    #TODO: clamp Q with the correct values v_i, v_j
+    G.es[diag_x_0_list]["capacity"] = np.diag(P[0])
+    G.es[diag_not_x_0_list]["capacity"] = np.diag(P[1])
+
+    c = 0 #use partial assignment to calculate the constant
     #or do it yourself
     return G, c
     
 
 def compare_graphs(G_adapted, G_truth):
     # Create a set of edges for both graphs
-    edges_G1 = set((e.source, e.target) for e in G_adapted.es)
-    edges_G2 = set((e.source, e.target) for e in G_truth.es)
+    edges_G1 = [(e.source, e.target) for e in G_adapted.es]
+    edges_G2 = [(e.source, e.target) for e in G_truth.es]
     
     # Initialize a dictionary to store the comparison results
     diff = 0
@@ -211,32 +234,40 @@ for i in range(40):
         print(compare_graphs(G_adapted, newG_truth))
 """
 
+"""
 Q = qubo(np.array([[-0.0347891 , -0.40028512, -0.68155756,  0.96315303],
        [ 0.        , -0.6173675 ,  0.87557738, -0.47181135],
        [ 0.        ,  0.        , -0.03672531, -0.99585558],
        [ 0.        ,  0.        ,  0.        , -0.69890477]]))
-print("Input:", Q)
+print("Input:\n", Q)
 P, const = Q.to_posiform()
-print("Posiform:", P)
-i = 1
-Q.m[i, :] = 0
-print("changedQ: ", Q)
-print("changedPosiform:", Q.to_posiform())
+G_orig = to_flow_graph(P)
+print("Posiform:\n", P)
+#i = 0
+j = 3
+Q.m[:, j] = 0
+print("changedQ:\n", Q)
+print("changedPosiform:\n", Q.to_posiform())
 
-G = to_flow_graph(P)
-for e in G.es:
-    print(e["capacity"])
-edges = np.array([(0, Q.n+i+2), (i+1, Q.n+1), (0, i+1), (Q.n+i+2, Q.n+1)])
-print("N=", Q.n)
-a = np.tile(i + 1, 2*(2*(Q.n - (i+1)))).reshape(-1, 2)
-print(a)
-a[:Q.n-(i+1), 1] = np.arange(i+2, Q.n+1)
-print(a)
-a[Q.n-(i+1):, 1] = Q.n + np.arange(i+2, Q.n+1)
-print(a)
-edge_list = G.get_eids(edges, directed=True, error=False)
-edge_list = list(filter((-1).__ne__, edge_list))
-G.es[edge_list]["capacity"] = 0
+print("Original graph:")
+for e in G_orig.es:
+    print(e.source, e.target, e["capacity"])
 print("+"*20)
-for e in G.es:
-    print(e["capacity"])
+print("Truth graph: ")
+G_truth = to_flow_graph(Q.to_posiform()[0])
+for e in G_truth.es:
+    print(e.source, e.target, e["capacity"])
+
+print("My graph:")
+G_adapted, c_adapted = clamp_graph(Q, G_orig, (0,j))
+for e in G_adapted.es:
+    print(e.source, e.target, e["capacity"])
+print("DIff:", compare_graphs(G_adapted, G_truth))"""
+
+n = 4
+a = np.zeros((2*n+1,2))
+a[:, 1] = np.arange(1, 2*n+2)
+b = np.repeat(5, 2*(2*n+2)-2).reshape(-1, 2)
+b[:, 0] = np.arange(1, 2*n+2)
+print(a)
+print(b)

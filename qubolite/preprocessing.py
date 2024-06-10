@@ -179,6 +179,7 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
                 prev_calculations["lowers"][0] = lower_0 + prev_change
                 prev_calculations["lowers"][1] = lower_1 + prev_change
     else:
+        #TODO: fix this part
         if i != j:
             prev_calculations = {"prev_increase": None, "uppers": [0.0,0.0,0.0,0.0], "lowers": [0.0,0.0,0.0,0.0], "upper_sample": [0, 0, 0, 0], "lower_graph": None}
             # Define sub-qubos
