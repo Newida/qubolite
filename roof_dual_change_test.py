@@ -238,30 +238,31 @@ def _clamp_posiform(P, changeidx):
     P_changed[0, i, :] = 0
     P_changed[1, i, :] = 0
     #calculate the new diagonal elements
-    diag_elements = np.diag(P[1, :, :]) - P[1, :, j]
-    negative_array = np.where(diag_elements > 0, diag_elements, 0)
-    positive_array = np.where(diag_elements < 0, -diag_elements, 0)
+    new_diag_elements = np.diag(P_changed[1, :, :]) - P_changed[1, :, j]
+    negative_array = np.where(new_diag_elements > 0, new_diag_elements, 0)
+    positive_array = np.where(new_diag_elements < 0, -new_diag_elements, 0)
     #removing j:
     P_changed[0, :, j] = 0
     P_changed[1, :, j] = 0
-
     #correcting the diagonal elements
     np.fill_diagonal(P_changed[0], np.diag(P_changed[0]) + positive_array)
     np.fill_diagonal(P_changed[1], negative_array)
+    P_changed[1, j, j] = np.sum(P_changed[1, j, j+1:])
+    
     return P_changed
 
 def test_clamp_posiform(n, num=10000):
     for i in tqdm(range(num)):
-        Q_orig = qubo.random(n=n, distr='uniform', low=-1, high=1)
-        P, _ = Q_orig.to_posiform()
-        Q = Q_orig.copy()
+        Q = qubo.random(n=n, distr='uniform', low=-1, high=1)
+        Q_orig = Q.copy()
+        P, _ = Q.to_posiform()
         change_indices = np.random.randint(0, Q.n, 2)
         i = change_indices[0]
         j = change_indices[1]
         if i > j:
             j, i = i, j
-        Q.m[:,j] = 0
         Q.m[i,:] = 0
+        Q.m[:,j] = 0
         P_changed = _clamp_posiform(P, (i,j))
         d = np.linalg.norm(Q.to_posiform()[0] - P_changed)
         if not np.isclose(d, 0):
@@ -279,61 +280,23 @@ def test_clamp_posiform(n, num=10000):
             return Q.to_posiform()[0], P_changed
     return None, None
 
-#test_clamp_posiform(4, 3)
-Q = qubo(np.array([[-0.08011814,  0.07762449, -0.57877048, -0.69547865],
-       [ 0.        , -0.31275536,  0.09832495, -0.99704806],
-       [ 0.        ,  0.        ,  0.02660838,  0.00245066],
-       [ 0.        ,  0.        ,  0.        ,  0.63774563]]))
+for i in range(2, 40):
+    a, b = test_clamp_posiform(i) 
+    if a is not None or b is not None:
+        print("Help")
+"""
+Q = qubo(np.array([[-0.88635144, -0.4690281 ,  0.90938295,  0.72549942],
+       [ 0.        , -0.21676543, -0.60432979,  0.20200042],
+       [ 0.        ,  0.        ,  0.54590842, -0.93813196],
+       [ 0.        ,  0.        ,  0.        , -0.36718008]]))
+print("Input:\n", Q)
 P = Q.to_posiform()[0]
-i, j = (1, 2)
-Q.m[:, j] = 0
+print("original Posiform: \n", P)
+i, j = (1, 1)
 Q.m[i, :] = 0
-print("True Posiform: \n", Q.to_posiform()[0])
+Q.m[:, j] = 0
+print("Posiform after clamping i and j: \n", Q.to_posiform()[0])
 P_changed = _clamp_posiform(P, (i, j))
+print("Predicted Posiform after clamping i and j: \n", P_changed)
 print("Diff:", np.linalg.norm(P_changed - Q.to_posiform()[0]))
-"""
-Q = qubo(np.array([[-0.08011814,  0.07762449, -0.57877048, -0.69547865],
-       [ 0.        , -0.31275536,  0.09832495, -0.99704806],
-       [ 0.        ,  0.        ,  0.02660838,  0.00245066],
-       [ 0.        ,  0.        ,  0.        ,  0.63774563]]))
-print("Input:\n", Q)
-P, const = Q.to_posiform()
-G_orig = to_flow_graph(P)
-print("Posiform:\n", P)
-j = 2
-Q.m[:, j] = 0
-print("changedQ:\n", Q)
-print("changedPosiform:\n", Q.to_posiform())
-P_predicted = P.copy()
-#calculate the new diagonal elements
-diag_elements = np.diag(P_predicted[1, :, :]) - P_predicted[1, :, j]
-# Create the first array with positive elements and 0s
-negative_array = np.where(diag_elements > 0, diag_elements, 0)
-# Create the second array with negative elements and 0s
-positive_array = np.where(diag_elements < 0, -diag_elements, 0)
-P_predicted[0, :, j] = 0
-P_predicted[1, :, j] = 0
-np.fill_diagonal(P_predicted[0], np.diag(P_predicted[0]) + positive_array)
-np.fill_diagonal(P_predicted[1], negative_array)
-print("Predicted Posiform:\n", P_predicted)
-print("Diff:", np.linalg.norm(P_predicted - Q.to_posiform()[0]))
-"""
-"""
-Q = qubo(np.array([[-0.0347891 , -0.40028512, -0.68155756,  0.96315303],
-       [ 0.        , -0.6173675 ,  0.87557738, -0.47181135],
-       [ 0.        ,  0.        , -0.03672531, -0.99585558],
-       [ 0.        ,  0.        ,  0.        , -0.69890477]]))
-print("Input:\n", Q)
-P, const = Q.to_posiform()
-print("Posiform:\n", P)
-i = 3
-#j = 3
-Q.m[i, :] = 0
-print("changedQ:\n", Q)
-print("changedPosiform:\n", Q.to_posiform())
-P_predicted = P.copy()
-P_predicted[0, i, :] = 0
-P_predicted[1, i, :] = 0
-print("predicted P:", P_predicted)
-print("Diff:", np.linalg.norm(P_predicted - Q.to_posiform()[0]))
 """
