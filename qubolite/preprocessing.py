@@ -195,6 +195,8 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             PA_1 = partial_assignment(assingment_1, n=Q.n)
             Q_0, c_0 = PA_0.apply(Q)
             Q_1, c_1 = PA_1.apply(Q)
+            lower_0 = lower_bound(Q_0) + c_0
+            lower_1 = lower_bound(Q_1) + c_1
             
             upper_or = upper_0
             lower_or = lower_0

@@ -12,6 +12,7 @@ Q = qubo(a)
 print(Q)
 Q_reduced = reduce_dynamic_range(Q, heuristic='greedy0', decision='heuristic', iterations=100)
 print(Q_reduced)
+"""
 Q = qubo.random(n=16, distr='uniform', low=-0.5, high=0.5)
 #np.save("Benchmark.npy", Q.m)
 pr = cProfile.Profile()
@@ -37,7 +38,7 @@ print("This took " + str(t) + " seconds.")
 #iterations = 1000
 #values q_{ij} \in [-0.5, 0.5]
 #1000 different matrices
-
+"""
 """
 pr = cProfile.Profile()
 Q = qubo.random(n=16, distr='uniform', low=-0.5, high=0.5)
