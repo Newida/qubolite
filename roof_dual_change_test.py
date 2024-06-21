@@ -1,5 +1,5 @@
 import numpy as np
-from qubolite import qubo
+from qubolite import qubo, assignment
 from igraph import Graph
 import random
 from tqdm import tqdm
@@ -37,6 +37,7 @@ def to_flow_graph(P):
         return G
 
 def adapt_graph(P, G_orig, change_idx):
+    """Given the old graph G_orig and the new posiform P, adapt the graph to the new posiform"""
     n = P.shape[1]
     G = G_orig.copy()
     #this function assume that i < j
@@ -118,6 +119,7 @@ def clamp_graph(Q, P, G_orig, change_idx, values):
     diag_not_x_0 = np.repeat(n+1, 2*(2*n+2)-2).reshape(-1, 2)
     diag_not_x_0[:, 0] = np.arange(1, 2*n+2)
     #TODO: non-diagonal elements missing
+    #TODO: use clamp posiform to calculate the new values
     
     #convert edges to edge_ids
     diag_x_0_list = G.get_eids(diag_x_0, directed=True, error=False)
@@ -128,11 +130,10 @@ def clamp_graph(Q, P, G_orig, change_idx, values):
 
     #set edge capacities
     #TODO: clamp Q with the correct values v_i, v_j
-    G.es[diag_x_0_list]["capacity"] = np.diag(P[0])
-    G.es[diag_not_x_0_list]["capacity"] = np.diag(P[1])
+    G.es[diag_x_0_list]["capacity"] = ...
+    G.es[diag_not_x_0_list]["capacity"] = ...
 
-    c = 0 #use partial assignment to calculate the constant
-    #or do it yourself
+    c = Q[i,i] * v_i + Q[j,j] * v_j + Q[i,j] * v_i * v_j
     return G, c
     
 def compare_graphs(G_adapted, G_truth):
@@ -231,25 +232,36 @@ for e in G_adapted.es:
     print(e.source, e.target, e["capacity"])
 print("DIff:", compare_graphs(G_adapted, G_truth))"""
 
-def _clamp_posiform(P, changeidx):
-    i, j = changeidx
+def _remove_variable_from_posiform(P, c, changeidx, value):
+    """Input: Posiform P, constant c, change indices (i, j), values of i and j
+    Output: Clamped Posiform P"""
+    v_i = value
+    i = changeidx
     P_changed = P.copy()
-    #removing i:
+    #removing row i:
     P_changed[0, i, :] = 0
     P_changed[1, i, :] = 0
     #calculate the new diagonal elements
-    new_diag_elements = np.diag(P_changed[1, :, :]) - P_changed[1, :, j]
+    new_diag_elements = np.diag(P_changed[1, :, :]) - P_changed[1, :, i]
     negative_array = np.where(new_diag_elements > 0, new_diag_elements, 0)
     positive_array = np.where(new_diag_elements < 0, -new_diag_elements, 0)
-    #removing j:
-    P_changed[0, :, j] = 0
-    P_changed[1, :, j] = 0
+    #removing column i:
+    P_changed[0, :, i] = 0
+    P_changed[1, :, i] = 0
     #correcting the diagonal elements
     np.fill_diagonal(P_changed[0], np.diag(P_changed[0]) + positive_array)
     np.fill_diagonal(P_changed[1], negative_array)
-    P_changed[1, j, j] = np.sum(P_changed[1, j, j+1:])
+    P_changed[1, i, i] = np.sum(P_changed[1, i, i+1:])
     
-    return P_changed
+    c = ...
+    return P_changed, c
+
+def _clamp_posiform(P, c, changeidx, values):
+    i, j = changeidx
+    v_i, v_j = values
+    newp, newc = _remove_variable_from_posiform(P, c, i, v_i)
+    newP, newC = _remove_variable_from_posiform(newp, newc, j, v_j)
+    return newP, newC
 
 def test_clamp_posiform(n, num=10000):
     for i in tqdm(range(num)):
@@ -280,23 +292,39 @@ def test_clamp_posiform(n, num=10000):
             return Q.to_posiform()[0], P_changed
     return None, None
 
+"""
 for i in range(2, 40):
     a, b = test_clamp_posiform(i) 
     if a is not None or b is not None:
         print("Help")
 """
+
 Q = qubo(np.array([[-0.88635144, -0.4690281 ,  0.90938295,  0.72549942],
        [ 0.        , -0.21676543, -0.60432979,  0.20200042],
        [ 0.        ,  0.        ,  0.54590842, -0.93813196],
        [ 0.        ,  0.        ,  0.        , -0.36718008]]))
+
 print("Input:\n", Q)
-P = Q.to_posiform()[0]
-print("original Posiform: \n", P)
-i, j = (1, 1)
-Q.m[i, :] = 0
-Q.m[:, j] = 0
-print("Posiform after clamping i and j: \n", Q.to_posiform()[0])
-P_changed = _clamp_posiform(P, (i, j))
+P, c = Q.to_posiform()
+print("Original Posiform:\n", P, c)
+i, j = (1, 2)
+v_i, v_j = (0, 1)
+assingment_str = 'x' + str(i) + '=' + str(v_i) + '; x' + str(j) + '=' + str(v_j)
+PA = assignment.partial_assignment(assingment_str, n=4)
+print(PA)
+newQ, c = PA.apply(Q)
+print("NewQ:\n", newQ)
+newP, newC = newQ.to_posiform()
+print("Posiform after clamping i and j: \n", newP, newC)
+P_changed, c_changed = _clamp_posiform(P, c, (i, j), (v_i, v_j))
 print("Predicted Posiform after clamping i and j: \n", P_changed)
-print("Diff:", np.linalg.norm(P_changed - Q.to_posiform()[0]))
-"""
+P_p = np.delete(np.delete(P_changed[0], i, axis=0), i, axis=1)
+P_P = np.delete(np.delete(P_p, j-1, axis=0), j-1, axis=1)
+P_n = np.delete(np.delete(P_changed[1], i, axis=0), i, axis=1)
+P_N = np.delete(np.delete(P_n, j-1, axis=0), j-1, axis=1)
+print("P_changed;", P_P, P_N)
+print("Diff P:", np.linalg.norm(P_P - newP[0]) +  np.linalg.norm(P_N - newP[1]))
+#print("Diff c:", abs(c_changed - newC))
+#TODO: find out how to make _clamp_posiform work with other than i=0, j=0
+#ask yourself what changes when setting e.g. j=1. Look at the formulas
+#should be similar to j=0 but with more change in the diagonal elements

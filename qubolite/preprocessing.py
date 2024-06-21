@@ -44,11 +44,11 @@ def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all
             i, j = x
             if (i,j) in all_prev_calculations.keys():
                 change, calculation = _compute_index_change(matrix_order, i, j,
-                                            heuristic, all_prev_calculations[(i,j)], all_prev_calculations["change"], all_prev_calculations["prev_changed_indices"]
+                                            heuristic, all_prev_calculations[(i,j)], all_prev_calculations["change"], all_prev_calculations["prev_changed_indices"],
                                             **bound_params)
             else:
-                change, calculation = _compute_index_change(matrix_order, i, j,
-                                            heuristic, None, None, None
+                change, calculation = _compute_index_change(matrix_order=matrix_order, i=i, j=j,
+                                            heuristic=heuristic, prev_calculations=None, prev_change=None, prev_changed_indices=None,
                                             **bound_params)
             all_prev_calculations[(i,j)] = calculation
             changes.append(change)
@@ -71,7 +71,7 @@ def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all
 
 def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, prev_changed_indices=None, **kwargs):
     lower_bound = {
-            'roof_dual': _roof_dual_change,
+            'roof_dual': lb_roof_dual, #_roof_dual_change,
             'min_sum': lb_negative_parameters
         }[kwargs.get('lower_bound', 'roof_dual')]
     upper_bound = {
@@ -109,10 +109,11 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
                 upper_11 = upper_11 + prev_change
 
             #updating the lower bounds to the change
-            if lower_bound == _roof_dual_change:
+            if lower_bound == _roof_dual_change and False:
                 G = prev_calculations["lower_graph"]
+                P, c = Q.to_posiform()
                 #incorporate the change into the graph
-                G, _ = _adapt_graph(Q, G, (old_i, old_j))
+                G, _ = _adapt_graph(P, G, (old_i, old_j))
                 #safe the new graph
                 prev_calculations["lower_graph"] = G
                 #clamp i=0, j=0
@@ -123,14 +124,32 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
                 lower_10 = _clamp_graph(Q, G, old_i, old_j)
                 #clamp i=1, j=1
                 lower_11 = _clamp_graph(Q, G, old_i, old_j)
+
+            #remove later when adapting lower bound works too
+            assingment_00 = "x" + str(i) + "=0; x" + str(j) + "=0"
+            assingment_01 = "x" + str(i) + "=0; x" + str(j) + "=1"
+            assingment_10 = "x" + str(i) + "=1; x" + str(j) + "=0"
+            assingment_11 = "x" + str(i) + "=1; x" + str(j) + "=1"
+            PA_00 = partial_assignment(assingment_00, n=Q.n)
+            PA_01 = partial_assignment(assingment_01, n=Q.n)
+            PA_10 = partial_assignment(assingment_10, n=Q.n)
+            PA_11 = partial_assignment(assingment_11, n=Q.n)
+            Q_00, c_00 = PA_00.apply(Q)
+            Q_01, c_01 = PA_01.apply(Q)
+            Q_10, c_10 = PA_10.apply(Q)
+            Q_11, c_11 = PA_11.apply(Q)
+            lower_11 = lower_bound(Q_11) + c_11
+            lower_00 = lower_bound(Q_00) + c_00
+            lower_01 = lower_bound(Q_01) + c_01
+            lower_10 = lower_bound(Q_10) + c_10
                 
             #calculating bounds for the change
             upper_or = min(upper_00, upper_01, upper_10)
             lower_or = min(lower_00, lower_01, lower_10)
             suboptimal = lower_11 > min(upper_00, upper_01, upper_10)
             optimal = upper_11 < min(lower_00, lower_01, lower_10)
-            upper_bound = float('inf') if suboptimal else lower_or - upper_11 - change_diff
-            lower_bound = -float('inf') if optimal else upper_or - lower_11 + change_diff
+            upper_bound = float('inf') if suboptimal else lower_or - upper_11
+            lower_bound = -float('inf') if optimal else upper_or - lower_11
 
             #saving the new bounds
             prev_calculations["uppers"][0] = upper_00 
@@ -138,14 +157,13 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             prev_calculations["uppers"][2] = upper_10 
             prev_calculations["uppers"][3] = upper_11
             
-            if lower_bound == _roof_dual_change:
+            if lower_bound == _roof_dual_change and False:
                 prev_calculations["lowers"][0] = lower_00 
                 prev_calculations["lowers"][1] = lower_01 
                 prev_calculations["lowers"][2] = lower_10 
                 prev_calculations["lowers"][3] = lower_11
                 
         else:
-            #TODO: change just as the case i \neq j
             old_i = prev_changed_indices[0]
             #updating the upper bounds to the change
             upper_0 = prev_uppers[0]
@@ -160,45 +178,55 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             if u_1[old_i] == 1:
                 upper_1 = upper_1 + prev_change
             if prev_increase:
-                upper_or = (upper_0 + prev_change)
+                upper_or = upper_0
                 lower_or = lower_0 
                 suboptimal = lower_1 > upper_or
                 optimal = upper_1 < lower_or
                 upper_bound = float("inf") if suboptimal else upper_or - lower_1 - change_diff
-                lower_bound = -float("inf") if optimal else lower_or - (upper_1 + prev_change) + change_diff
+                lower_bound = -float("inf") if optimal else lower_or - upper_1 + change_diff
 
                 prev_calculations["uppers"][0] = upper_0 + prev_change
                 prev_calculations["uppers"][1] = upper_1 + prev_change
             else:
                 upper_or = upper_0
-                lower_or = lower_0 + prev_change
+                lower_or = lower_0
                 suboptimal = lower_1 > upper_or
                 optimal = upper_1 < lower_or
-                upper_bound = float("inf") if suboptimal else upper_or - (lower_1 + prev_change) - change_diff
+                upper_bound = float("inf") if suboptimal else upper_or - lower_1 - change_diff
                 lower_bound = -float("inf") if optimal else lower_or - upper_1 + change_diff
                 prev_calculations["lowers"][0] = lower_0 + prev_change
                 prev_calculations["lowers"][1] = lower_1 + prev_change
     else:
-        #TODO: fix this part
         if i != j:
             prev_calculations = {"prev_increase": None, "uppers": [0.0,0.0,0.0,0.0], "lowers": [0.0,0.0,0.0,0.0], "upper_sample": [0, 0, 0, 0], "lower_graph": None}
             # Define sub-qubos
-            #TODO: rewrite clamp by using assignment.partial_assignment expand and apply
-            Q_00, c_00, _ = Q.clamp({i: 0, j: 0})
-            Q_01, c_01, _ = Q.clamp({i: 0, j: 1})
-            Q_10, c_10, _ = Q.clamp({i: 1, j: 0})
-            Q_11, c_11, _ = Q.clamp({i: 1, j: 1})
+            assingment_00 = "x" + str(i) + "=0; x" + str(j) + "=0"
+            assingment_01 = "x" + str(i) + "=0; x" + str(j) + "=1"
+            assingment_10 = "x" + str(i) + "=1; x" + str(j) + "=0"
+            assingment_11 = "x" + str(i) + "=1; x" + str(j) + "=1"
+            PA_00 = partial_assignment(assingment_00, n=Q.n)
+            PA_01 = partial_assignment(assingment_01, n=Q.n)
+            PA_10 = partial_assignment(assingment_10, n=Q.n)
+            PA_11 = partial_assignment(assingment_11, n=Q.n)
+            Q_00, c_00 = PA_00.apply(Q)
+            Q_01, c_01 = PA_01.apply(Q)
+            Q_10, c_10 = PA_10.apply(Q)
+            Q_11, c_11 = PA_11.apply(Q)
             # compute bounds
-            u_00, upper_00 = upper_bound(Q_00) + c_00
-            u_01, upper_01 = upper_bound(Q_01) + c_01
-            u_10, upper_10 = upper_bound(Q_10) + c_10
+            u_00, upper_00 = upper_bound(Q_00)
+            upper_00 += c_00
+            u_01, upper_01 = upper_bound(Q_01)
+            upper_01 += c_01
+            u_10, upper_10 = upper_bound(Q_10)
+            upper_10 += c_10
             lower_11 = lower_bound(Q_11) + c_11
             upper_or = min(upper_00, upper_01, upper_10)
 
             lower_00 = lower_bound(Q_00) + c_00
             lower_01 = lower_bound(Q_01) + c_01
             lower_10 = lower_bound(Q_10) + c_10
-            u_11, upper_11 = upper_bound(Q_11) + c_11
+            u_11, upper_11 = upper_bound(Q_11)
+            upper_11 += c_11
             lower_or = min(lower_00, lower_01, lower_10)
 
             suboptimal = lower_11 > min(upper_00, upper_01, upper_10)
@@ -215,25 +243,31 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             prev_calculations["lowers"][2] = lower_10 
             prev_calculations["lowers"][3] = lower_11
 
-            prev_calculations["upper_sample"][0] = u_00 
-            prev_calculations["upper_sample"][1] = u_01 
-            prev_calculations["upper_sample"][2] = u_10 
-            prev_calculations["upper_sample"][3] = u_11
+            prev_calculations["upper_sample"][0] = PA_00.expand(u_00) 
+            prev_calculations["upper_sample"][1] = PA_01.expand(u_01) 
+            prev_calculations["upper_sample"][2] = PA_10.expand(u_10)
+            prev_calculations["upper_sample"][3] = PA_11.expand(u_11)
 
-            if lower_bound == _roof_dual_change:
+            if lower_bound == _roof_dual_change and False:
                 P, const = Q.to_posiform()
                 prev_calculations["lower_graph"] = _to_flow_graph(P)
         else:
-            prev_calculations = {"prev_increase": None, "uppers": [0.0,0.0], "lowers": [0.0,0.0], "upper_sample": [0, 0]}
+            prev_calculations = {"prev_increase": None, "uppers": [0.0,0.0], "lowers": [0.0,0.0], "upper_sample": [0, 0], "lower_graph": None}
             # Define sub-qubos
-            Q_0, c_0, _ = Q.clamp({i: 0})
-            Q_1, c_1, _ = Q.clamp({i: 1})
+            assingment_0 = "x" + str(i) + "=0"
+            assingment_1 = "x" + str(i) + "=1"
+            PA_0 = partial_assignment(assingment_0, n=Q.n)
+            PA_1 = partial_assignment(assingment_1, n=Q.n)
+            Q_0, c_0 = PA_0.apply(Q)
+            Q_1, c_1 = PA_1.apply(Q)
             # Compute bounds
-            u_0, upper_0 = upper_bound(Q_0) + c_0
+            u_0, upper_0 = upper_bound(Q_0)
+            upper_0 += c_0
             lower_1 = lower_bound(Q_1) + c_1
 
             lower_0 = lower_bound(Q_0) + c_0
-            u_1, upper_1 = upper_bound(Q_1) + c_1
+            u_1, upper_1 = upper_bound(Q_1)
+            upper_1 += c_1
             suboptimal = lower_1 > upper_0
             optimal = upper_1 < lower_0
             upper_bound = float("inf") if suboptimal else lower_0 - upper_1 - change_diff
@@ -244,52 +278,54 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             prev_calculations["lowers"][0] = lower_0
             prev_calculations["lowers"][1] = lower_1
 
-            prev_calculations["upper_sample"][0] = u_0 
-            prev_calculations["upper_sample"][1] = u_1 
+            prev_calculations["upper_sample"][0] = PA_0.expand(u_0)
+            prev_calculations["upper_sample"][1] = PA_1.expand(u_1)
             
     return lower_bound, upper_bound, prev_calculations
 
-def _adapt_graph(Q, G_orig, change_idx):
+def _adapt_graph(P, G_orig, change_idx):
+    """Given the old graph G_orig and the new posiform P, adapt the graph to the new posiform"""
+    n = P.shape[1]
     G = G_orig.copy()
     #this function assume that i < j
-    P, c = Q.to_posiform()
     i, j = change_idx
     #x_i => edge x_0 not_x_i and x_i not_x_0
-    if not G.are_connected(0, Q.n + (i+2)):
+    if not G.are_connected(0, n + (i+2)):
         if P[0, i,i] != 0:
-            G.add_edge(0, Q.n + (i+2), capacity=P[0, i,i]/2.0)
-            G.add_edge((i+1), Q.n + 1, capacity=P[0, i,i]/2.0)
+            G.add_edge(0, n + (i+2), capacity=P[0, i,i]/2.0)
+            G.add_edge((i+1), n + 1, capacity=P[0, i,i]/2.0)
     else:
-        G.es[G.get_eid(0, Q.n + (i+2))]["capacity"] = P[0, i,i]/2.0
-        G.es[G.get_eid(i+1, Q.n + 1)]["capacity"] = P[0, i,i]/2.0
+        G.es[G.get_eid(0, n + (i+2))]["capacity"] = P[0, i,i]/2.0
+        G.es[G.get_eid(i+1, n + 1)]["capacity"] = P[0, i,i]/2.0
 
     #not_x_i => edge x_0 x_i and not_x_i not_x_0
     if not G.are_connected(0, i+1):
         if P[1, i,i]/2.0 != 0:
             G.add_edge(0, (i+1), capacity=P[1, i,i]/2.0)
-            G.add_edge(Q.n + (i+2), Q.n + 1, capacity=P[1, i,i]/2.0)
+            G.add_edge(n + (i+2), n + 1, capacity=P[1, i,i]/2.0)
     else:
         G.es[G.get_eid(0, i+1)]["capacity"] = P[1, i,i]/2.0
-        G.es[G.get_eid(Q.n + (i+2), Q.n + 1)]["capacity"] = P[1, i,i]/2.0
+        G.es[G.get_eid(n + (i+2), n + 1)]["capacity"] = P[1, i,i]/2.0
     if i != j:
         #x_i x_j => edge x_i not_x_j and x_j not_x_i
-        if not G.are_connected(i+1, Q.n + (j+2)):
+        if not G.are_connected(i+1, n + (j+2)):
             if P[0, i,j]/2.0 != 0:
-                G.add_edge((i+1), Q.n + (j+2), capacity=P[0, i,j]/2.0)
-                G.add_edge((j+1), Q.n + (i+2), capacity=P[0, i,j]/2.0)
+                G.add_edge((i+1), n + (j+2), capacity=P[0, i,j]/2.0)
+                G.add_edge((j+1), n + (i+2), capacity=P[0, i,j]/2.0)
         else:
-            G.es[G.get_eid(i+1, Q.n + (j+2))]["capacity"] = P[0, i,j]/2.0
-            G.es[G.get_eid(j+1, Q.n + (i+2))]["capacity"] = P[0, i,j]/2.0
+            G.es[G.get_eid(i+1, n + (j+2))]["capacity"] = P[0, i,j]/2.0
+            G.es[G.get_eid(j+1, n + (i+2))]["capacity"] = P[0, i,j]/2.0
     
         #x_i not_x_j => edge x_i x_j and not_x_j not_x_i
         if not G.are_connected((i+1), (j+1)):
             if P[1, i,j]/2.0 != 0:
                 G.add_edge((i+1), (j+1), capacity=P[1, i,j]/2.0)
-                G.add_edge(Q.n + (j+2), Q.n + (i+2), capacity=P[1, i,j]/2.0)
+                G.add_edge(n + (j+2), n + (i+2), capacity=P[1, i,j]/2.0)
         else:
             G.es[G.get_eid((i+1), (j+1))]["capacity"] = P[1, i,j]/2.0
-            G.es[G.get_eid(Q.n + (j+2), Q.n + (i+2))]["capacity"] = P[1, i,j]/2.0
-    return G, c
+            G.es[G.get_eid(n + (j+2), n + (i+2))]["capacity"] = P[1, i,j]/2.0
+
+    return G
 
 def _roof_dual_change(Q, G, change_idx):
     G, const = _adapt_graph(Q, G, change_idx)
@@ -380,7 +416,7 @@ def _compute_index_change(matrix_order, i, j, heuristic=None, prev_calculations=
         change = max(pre_opt_change, dyn_range_change)
         if change > 0 or np.isclose(change, 0):
             change = 0
-        #i think because of rounding issues of e.g. 0.9999 istead of 1
+        #i think because of rounding issues of e.g. 0.9999 instead of 1
         #we should also test np.isclose(matrix[i,j], -change)
         #therfore added the or clause
         elif (0 < matrix_order.matrix[i, j] < - change or np.isclose(matrix_order.matrix[i,j], -change)) and set_to_zero:
@@ -440,12 +476,13 @@ def reduce_dynamic_range(
     all_prev_calculations = dict()
     for it in range(iterations):
         if not stop_update:
-            if it % 10 == 0:
+            if it % 1000 == 0:
                 #resetting memory to calculate new bounds
                 all_prev_calculations = dict()
-            i, j, change, all_prev_calculations = _compute_change(matrix_order, heuristic=heuristic,
-                                            npr=npr, decision=decision,
+            i, j, change, all_prev_calculations = _compute_change(matrix_order=matrix_order, npr=npr, heuristic=heuristic,
+                                            decision=decision,
                                             all_prev_calculations=all_prev_calculations, **kwargs)
+            #_compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all_prev_calculations=dict(), **bound_params):
             stop_update = matrix_order.update_entry(i, j, change)
             all_prev_calculations["change"] = change
             all_prev_calculations["prev_changed_indices"] = (i, j)
