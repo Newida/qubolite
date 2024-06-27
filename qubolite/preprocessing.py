@@ -226,21 +226,33 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             Q_01, c_01 = PA_01.apply(Q)
             Q_10, c_10 = PA_10.apply(Q)
             Q_11, c_11 = PA_11.apply(Q)
-            # compute bounds
-            u_00, upper_00 = upper_bound(Q_00)
-            upper_00 += c_00
-            u_01, upper_01 = upper_bound(Q_01)
-            upper_01 += c_01
-            u_10, upper_10 = upper_bound(Q_10)
-            upper_10 += c_10
-            lower_11 = lower_bound(Q_11) + c_11
-            upper_or = min(upper_00, upper_01, upper_10)
+            if Q.n == 2:
+                upper_00 = c_00
+                u_00 = u_01 = u_10 = u_11 = np.array([])
+                upper_01 = c_01
+                upper_10 = c_10
+                upper_11 = c_11
 
-            lower_00 = lower_bound(Q_00) + c_00
-            lower_01 = lower_bound(Q_01) + c_01
-            lower_10 = lower_bound(Q_10) + c_10
-            u_11, upper_11 = upper_bound(Q_11)
-            upper_11 += c_11
+                lower_00 = c_00
+                lower_01 = c_01
+                lower_10 = c_10
+                lower_11 = c_11
+            else:# compute bounds
+                u_00, upper_00 = upper_bound(Q_00)
+                upper_00 += c_00
+                u_01, upper_01 = upper_bound(Q_01)
+                upper_01 += c_01
+                u_10, upper_10 = upper_bound(Q_10)
+                upper_10 += c_10
+                u_11, upper_11 = upper_bound(Q_11)
+                upper_11 += c_11
+
+                lower_00 = lower_bound(Q_00) + c_00
+                lower_01 = lower_bound(Q_01) + c_01
+                lower_10 = lower_bound(Q_10) + c_10
+                lower_11 = lower_bound(Q_11) + c_11
+            
+            upper_or = min(upper_00, upper_01, upper_10)
             lower_or = min(lower_00, lower_01, lower_10)
 
             suboptimal = lower_11 > min(upper_00, upper_01, upper_10)
@@ -433,7 +445,7 @@ def _compute_index_change(matrix_order, i, j, heuristic=None, prev_calculations=
         #i think because of rounding issues of e.g. 0.9999 instead of 1
         #we should also test np.isclose(matrix[i,j], -change)
         #therfore added the or clause
-        elif (0 < matrix_order.matrix[i, j] < - change or np.isclose(matrix_order.matrix[i,j], -change)) and set_to_zero:
+        elif 0 < matrix_order.matrix[i, j] < - change and set_to_zero:
             change = - matrix_order.matrix[i, j]
         else:
             change = _check_to_next_decrease(matrix_order, change, i, j)
@@ -500,6 +512,7 @@ def reduce_dynamic_range(
             stop_update = matrix_order.update_entry(i, j, change)
             all_prev_calculations["change"] = change
             all_prev_calculations["prev_changed_indices"] = (i, j)
+            print(it, matrix_order.matrix)
             del all_prev_calculations[(i,j)]
             if callback is not None:
                 callback(i, j, change, matrix_order, it)
