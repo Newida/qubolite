@@ -383,6 +383,8 @@ def _check_to_next_increase(matrix_order, change, i, j):
     current_entry = matrix_order.matrix[i, j]
     new_entry = current_entry + change
     lower_index = np.searchsorted(matrix_order.unique, new_entry, side='right')
+    if np.isclose(new_entry, 0):
+        lower_index -= 1
     lower_entry = matrix_order.unique[lower_index - 1]
     min_dis = matrix_order.min_distance
     lower_interval = P.open(lower_entry - min_dis, lower_entry + min_dis)
@@ -401,6 +403,8 @@ def _check_to_next_decrease(matrix_order, change, i, j):
     current_entry = matrix_order.matrix[i, j]
     new_entry = current_entry + change
     upper_index = np.searchsorted(matrix_order.unique, new_entry, side='left')
+    if np.isclose(new_entry, 0):
+        lower_index += 1
     upper_entry = matrix_order.unique[upper_index]
     min_dis = matrix_order.min_distance
     upper_interval = P.open(upper_entry - min_dis, upper_entry + min_dis)
@@ -423,7 +427,7 @@ def _compute_index_change(matrix_order, i, j, heuristic=None, prev_calculations=
     # Bounds on changes based on preserving the optimum
     if increase:
         _, pre_opt_change, prev_calculations = _compute_pre_opt_bounds(matrix_order.matrix, i, j, prev_calculations, prev_change, prev_changed_indices, **kwargs)
-        prev_calculations["prev_increase"] = True
+        prev_calculations["prev_increase"] = True #do i even need this still?
     else:
         pre_opt_change, _, prev_calculations = _compute_pre_opt_bounds(matrix_order.matrix, i, j, prev_calculations, prev_change, prev_changed_indices, **kwargs)
         prev_calculations["prev_increase"] = False
@@ -434,7 +438,7 @@ def _compute_index_change(matrix_order, i, j, heuristic=None, prev_calculations=
         change = min(pre_opt_change, dyn_range_change)
         if change < 0 or np.isclose(change, 0):
             change = 0
-        elif 0 > matrix_order.matrix[i, j] > - change and set_to_zero:
+        elif 0 > matrix_order.matrix[i, j] > - change and not np.isclose(-change, matrix_order.matrix[i,j]) and set_to_zero:
             change = - matrix_order.matrix[i, j]
         else:
             change = _check_to_next_increase(matrix_order, change, i, j)
@@ -442,10 +446,7 @@ def _compute_index_change(matrix_order, i, j, heuristic=None, prev_calculations=
         change = max(pre_opt_change, dyn_range_change)
         if change > 0 or np.isclose(change, 0):
             change = 0
-        #i think because of rounding issues of e.g. 0.9999 instead of 1
-        #we should also test np.isclose(matrix[i,j], -change)
-        #therfore added the or clause
-        elif 0 < matrix_order.matrix[i, j] < - change and set_to_zero:
+        elif 0 < matrix_order.matrix[i, j] < - change and not np.isclose(-change, matrix_order.matrix[i,j]) and set_to_zero:
             change = - matrix_order.matrix[i, j]
         else:
             change = _check_to_next_decrease(matrix_order, change, i, j)

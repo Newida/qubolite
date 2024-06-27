@@ -44,9 +44,10 @@ def test_reduce_dynamic_range(maxDim, testSize=1000):
 
 #Q, Q_reduced = test_reduce_dynamic_range(3)
 
-Q  = qubo(np.array([[-0.34119098,  0.78888264],
-       [ 0.        ,  0.33257863]]))
+Q  = qubo(-np.array([[-0.46402191, -0.9759945 ],
+       [ 0.        , -0.67029873]]))
 Q_reduced = reduce_dynamic_range(Q, heuristic='greedy0', decision='heuristic', iterations=100)
+print("Q_reduced: ", Q_reduced)
 truth, _ = brute_force_solutions(Q)
 reduced, _ = brute_force_solutions(Q_reduced)
 print("Truth: ", truth)
