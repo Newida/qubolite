@@ -44,8 +44,12 @@ def test_reduce_dynamic_range(maxDim, testSize=1000):
 
 #Q, Q_reduced = test_reduce_dynamic_range(3)
 
-Q  = qubo(-np.array([[-0.46402191, -0.9759945 ],
-       [ 0.        , -0.67029873]]))
+#TODO: Fix problem with numerical errors in _check_to_next_increase.
+#If the entry is close to the change the variable new_entry is extremely close to 0.
+#Sometimes the entry is -9.9e-09 and sometimes 1.1e-16, which is both extremely close to 0.
+#But the sign is appreantly extremely important, since the algorithm only insterts correctly if the sign is correct.
+Q  = qubo(np.array([[ 0.84540399,  0.50028059],
+       [ 0.        , -0.33453025]]))
 Q_reduced = reduce_dynamic_range(Q, heuristic='greedy0', decision='heuristic', iterations=100)
 print("Q_reduced: ", Q_reduced)
 truth, _ = brute_force_solutions(Q)

@@ -380,6 +380,8 @@ def _dynamic_range_change(i, j, change, matrix_order):
     return dynamic_range_diff
 
 def _check_to_next_increase(matrix_order, change, i, j):
+    #TODO: the if clause does not work. When do i insert left and when right from 0?
+    #What does this function actually do and why?
     current_entry = matrix_order.matrix[i, j]
     new_entry = current_entry + change
     lower_index = np.searchsorted(matrix_order.unique, new_entry, side='right')
@@ -404,7 +406,7 @@ def _check_to_next_decrease(matrix_order, change, i, j):
     new_entry = current_entry + change
     upper_index = np.searchsorted(matrix_order.unique, new_entry, side='left')
     if np.isclose(new_entry, 0):
-        lower_index += 1
+        upper_index += 1
     upper_entry = matrix_order.unique[upper_index]
     min_dis = matrix_order.min_distance
     upper_interval = P.open(upper_entry - min_dis, upper_entry + min_dis)
