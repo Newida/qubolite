@@ -24,7 +24,7 @@ def brute_force_solutions(Q):
     minima_idx = np.argmin(energies)
     return binary_vectors[minima_idx], energies[minima_idx]
 
-def test_reduce_dynamic_range(maxDim, testSize=1000):
+def test_reduce_dynamic_range(maxDim, testSize=50):
     for n in range(2, maxDim+1):
        print("Testing for n = ", n)
        for i in tqdm(range(testSize)):
@@ -42,21 +42,21 @@ def test_reduce_dynamic_range(maxDim, testSize=1000):
             print("Q: ", Q)
             return Q, Q_reduced
 
-#Q, Q_reduced = test_reduce_dynamic_range(3)
+#Q, Q_reduced = test_reduce_dynamic_range(5)
 
-#TODO: Fix problem with numerical errors in _check_to_next_increase.
-#If the entry is close to the change the variable new_entry is extremely close to 0.
-#Sometimes the entry is -9.9e-09 and sometimes 1.1e-16, which is both extremely close to 0.
-#But the sign is appreantly extremely important, since the algorithm only insterts correctly if the sign is correct.
-Q  = qubo(np.array([[ 0.84540399,  0.50028059],
-       [ 0.        , -0.33453025]]))
+#TODO:
+#The following instance shows some error in the upper bound calculation cumulating over many iterations
+#Investigate the error and fix it
+Q = qubo(np.array([[ 0.84486113, -0.05873683, -0.30789118],
+       [ 0.        , -0.23139372, -0.21270047],
+       [ 0.        ,  0.        ,  0.11641394]]))
+
 Q_reduced = reduce_dynamic_range(Q, heuristic='greedy0', decision='heuristic', iterations=100)
 print("Q_reduced: ", Q_reduced)
 truth, _ = brute_force_solutions(Q)
 reduced, _ = brute_force_solutions(Q_reduced)
 print("Truth: ", truth)
 print("Reduced: ", reduced)
-
 """
 Q = qubo.random(n=16, distr='uniform', low=-0.5, high=0.5)
 #np.save("Benchmark.npy", Q.m)
