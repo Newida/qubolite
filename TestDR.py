@@ -47,10 +47,9 @@ def test_reduce_dynamic_range(maxDim, testSize=50):
 #TODO:
 #The following instance shows some error in the upper bound calculation cumulating over many iterations
 #Investigate the error and fix it
-"""
-Q = qubo(np.array([[ 0.84486113, -0.05873683, -0.30789118],
-       [ 0.        , -0.23139372, -0.21270047],
-       [ 0.        ,  0.        ,  0.11641394]]))
+
+Q = qubo(np.array([[-0.7850466 , -0.92642413],
+       [ 0.        , -0.33099508]]))
 
 Q_reduced = reduce_dynamic_range(Q, heuristic='greedy0', decision='heuristic', iterations=100)
 print("Q_reduced: ", Q_reduced)
@@ -58,7 +57,7 @@ truth, _ = brute_force_solutions(Q)
 reduced, _ = brute_force_solutions(Q_reduced)
 print("Truth: ", truth)
 print("Reduced: ", reduced)
-"""
+
 """
 Q = qubo.random(n=16, distr='uniform', low=-0.5, high=0.5)
 #np.save("Benchmark.npy", Q.m)

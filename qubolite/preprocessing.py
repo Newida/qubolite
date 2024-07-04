@@ -42,22 +42,43 @@ def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all
         drs = list()
         previous_change = all_prev_calculations["change"]
         previous_changed_indices = all_prev_calculations["prev_changed_indices"]
-        for i, j in indices:
-            if (i,j) not in all_prev_calculations:
-                all_prev_calculations[(i,j)] = None
 
-        for x in all_prev_calculations.keys():
-            if not isinstance(x, tuple):
-                continue
-            i, j = x
+        indices_set = set(indices)
+        known_set = set(all_prev_calculations["memory"].keys())
+        known_candidates = indices_set & known_set
+        unknown_candidates = indices_set - known_set
+        other_known_indices = known_set - indices_set
+
+        for i, j in known_candidates:
             memory = all_prev_calculations[(i,j)]
             change, calculation = _compute_index_change(matrix_order, i, j,
                                         heuristic, memory, previous_change, previous_changed_indices,
                                         **bound_params)
-            all_prev_calculations[(i,j)] = calculation
+            all_prev_calculations["memory"][(i,j)] = calculation
             changes.append(change)
-
             drs.append(_dynamic_range_change(i, j, change, matrix_order))
+
+        for i, j in unknown_candidates:
+            memory = None
+            change, calculation = _compute_index_change(matrix_order, i, j,
+                                        heuristic, memory, previous_change, previous_changed_indices,
+                                        **bound_params)
+            all_prev_calculations["memory"][(i,j)] = calculation
+            changes.append(change)
+            drs.append(_dynamic_range_change(i, j, change, matrix_order))
+
+        for i, j in other_known_indices:
+            lower_bound = {
+                'roof_dual': lb_roof_dual, #_roof_dual_change,
+                'min_sum': lb_negative_parameters
+                }[bound_params.get('lower_bound', 'roof_dual')]
+            lower_bound = partial(lower_bound, **bound_params.get('lower_bound_kwargs', {}))
+            old_i, old_j = previous_changed_indices
+            memory = all_prev_calculations[(i,j)]    
+            if i != j:
+                _update_bounds_ij(memory, old_i, old_j, previous_change, lower_bound, i, j, qubo(matrix_order.matrix))
+            else:
+                _update_bounds_i(memory, old_i, old_j, previous_change, lower_bound, i, qubo(matrix_order.matrix))
 
         if np.any(drs):
             index = np.argmax(drs)
@@ -68,7 +89,7 @@ def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all
             change, calculation = _compute_index_change(matrix_order, i, j,
                                            heuristic=heuristic,
                                            **bound_params)
-            all_prev_calculations[(i,j)] = calculation
+            all_prev_calculations["memory"][(i,j)] = calculation
     else:
         raise NotImplementedError
     return i, j, change, all_prev_calculations
@@ -87,66 +108,10 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
     change_diff = kwargs.get('change_diff', 1e-08)
     Q = qubo(Q)
     if prev_calculations is not None:
-        prev_lowers = prev_calculations["lowers"]
-        prev_uppers = prev_calculations["uppers"]
-        prev_increase = prev_calculations["prev_increase"]
+        old_i = prev_changed_indices[0]
+        old_j = prev_changed_indices[1]
         if i != j:
-            old_i = prev_changed_indices[0]
-            old_j = prev_changed_indices[1]
-            #updating the upper bounds to the change
-            upper_00 = prev_uppers[0]
-            upper_01 = prev_uppers[1]
-            upper_10 = prev_uppers[2]
-            upper_11 = prev_uppers[3]
-
-            u_00 = prev_calculations["upper_sample"][0]
-            u_01 = prev_calculations["upper_sample"][1]
-            u_10 = prev_calculations["upper_sample"][2]
-            u_11 = prev_calculations["upper_sample"][3]
-            if u_00[old_i] + u_00[old_j] == 2:
-                upper_00 = upper_00 + prev_change
-            if u_01[old_i] + u_01[old_j] == 2:
-                upper_01 = upper_01 + prev_change
-            if u_10[old_i] + u_10[old_j] == 2:
-                upper_10 = upper_10 + prev_change
-            if u_11[old_i] + u_11[old_j] == 2:
-                upper_11 = upper_11 + prev_change
-
-            #updating the lower bounds to the change
-            if lower_bound == _roof_dual_change and False:
-                G = prev_calculations["lower_graph"]
-                P, c = Q.to_posiform()
-                #incorporate the change into the graph
-                G, _ = _adapt_graph(P, G, (old_i, old_j))
-                #safe the new graph
-                prev_calculations["lower_graph"] = G
-                #clamp i=0, j=0
-                lower_00 = _clamp_graph(Q, G, old_i, old_j)
-                #clamp i=0, j=1
-                lower_01 = _clamp_graph(Q, G, old_i, old_j)
-                #clamp i=1, j=0
-                lower_10 = _clamp_graph(Q, G, old_i, old_j)
-                #clamp i=1, j=1
-                lower_11 = _clamp_graph(Q, G, old_i, old_j)
-
-            #remove later when adapting lower bound works too
-            assingment_00 = "x" + str(i) + "=0; x" + str(j) + "=0"
-            assingment_01 = "x" + str(i) + "=0; x" + str(j) + "=1"
-            assingment_10 = "x" + str(i) + "=1; x" + str(j) + "=0"
-            assingment_11 = "x" + str(i) + "=1; x" + str(j) + "=1"
-            PA_00 = partial_assignment(assingment_00, n=Q.n)
-            PA_01 = partial_assignment(assingment_01, n=Q.n)
-            PA_10 = partial_assignment(assingment_10, n=Q.n)
-            PA_11 = partial_assignment(assingment_11, n=Q.n)
-            Q_00, c_00 = PA_00.apply(Q)
-            Q_01, c_01 = PA_01.apply(Q)
-            Q_10, c_10 = PA_10.apply(Q)
-            Q_11, c_11 = PA_11.apply(Q)
-            lower_11 = lower_bound(Q_11) + c_11
-            lower_00 = lower_bound(Q_00) + c_00
-            lower_01 = lower_bound(Q_01) + c_01
-            lower_10 = lower_bound(Q_10) + c_10
-                
+            upper_00, upper_01, upper_10, upper_11, lower_00, lower_01, lower_10, lower_11 = _update_bounds_ij(prev_calculations, old_i, old_j, prev_change, lower_bound, i, j, Q)
             #calculating bounds for the change
             upper_or = min(upper_00, upper_01, upper_10)
             lower_or = min(lower_00, lower_01, lower_10)
@@ -154,53 +119,10 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             optimal = upper_11 < min(lower_00, lower_01, lower_10)
             upper_bound = float('inf') if suboptimal else lower_or - upper_11 - change_diff
             lower_bound = -float('inf') if optimal else upper_or - lower_11 + change_diff
-
-            #saving the new bounds
-            prev_calculations["uppers"][0] = upper_00 
-            prev_calculations["uppers"][1] = upper_01 
-            prev_calculations["uppers"][2] = upper_10 
-            prev_calculations["uppers"][3] = upper_11
-            
-            prev_calculations["lowers"][0] = lower_00 
-            prev_calculations["lowers"][1] = lower_01 
-            prev_calculations["lowers"][2] = lower_10 
-            prev_calculations["lowers"][3] = lower_11
             
         else:
-            old_i = prev_changed_indices[0]
-            old_j = prev_changed_indices[1]
             #updating the upper bounds to the change
-            upper_0 = prev_uppers[0]
-            upper_1 = prev_uppers[1]
-            u_0 = prev_calculations["upper_sample"][0]
-            u_1 = prev_calculations["upper_sample"][1]
-            if u_0[old_i] + u_0[old_j] == 2:
-                upper_0 = upper_0 + prev_change
-            if u_1[old_i] + u_1[old_j] == 2:
-                upper_1 = upper_1 + prev_change
-
-            if lower_bound == _roof_dual_change and False:
-                G = prev_calculations["lower_graph"]
-                P, c = Q.to_posiform()
-                #incorporate the change into the graph
-                G, _ = _adapt_graph(P, G, (old_i, old_j))
-                #safe the new graph
-                prev_calculations["lower_graph"] = G
-                #clamp i=0
-                lower_0 = _clamp_graph(Q, G, old_i, old_j)
-                #clamp i=1
-                lower_1 = _clamp_graph(Q, G, old_i, old_j)
-
-            #remove later when adapting lower bound works too
-            assingment_0 = "x" + str(i) + "=0"
-            assingment_1 = "x" + str(i) + "=1"
-            PA_0 = partial_assignment(assingment_0, n=Q.n)
-            PA_1 = partial_assignment(assingment_1, n=Q.n)
-            Q_0, c_0 = PA_0.apply(Q)
-            Q_1, c_1 = PA_1.apply(Q)
-            lower_0 = lower_bound(Q_0) + c_0
-            lower_1 = lower_bound(Q_1) + c_1
-            
+            upper_0, upper_1, lower_0, lower_1 = _update_bounds_i(prev_calculations, old_i, old_j, prev_change, lower_bound, i, Q)
             upper_or = upper_0
             lower_or = lower_0
             suboptimal = lower_1 > upper_or
@@ -208,10 +130,6 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             upper_bound = float("inf") if suboptimal else upper_or - lower_1 - change_diff
             lower_bound = -float("inf") if optimal else lower_or - upper_1 + change_diff
 
-            prev_calculations["uppers"][0] = upper_0 
-            prev_calculations["uppers"][1] = upper_1 
-            prev_calculations["lowers"][0] = lower_0 
-            prev_calculations["lowers"][1] = lower_1 
     else:
         if i != j:
             prev_calculations = {"prev_increase": None, "uppers": [0.0,0.0,0.0,0.0], "lowers": [0.0,0.0,0.0,0.0], "upper_sample": [0, 0, 0, 0], "lower_graph": None}
@@ -228,6 +146,7 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             Q_01, c_01 = PA_01.apply(Q)
             Q_10, c_10 = PA_10.apply(Q)
             Q_11, c_11 = PA_11.apply(Q)
+
             if Q.n == 2:
                 upper_00 = c_00
                 u_00 = u_01 = u_10 = u_11 = np.array([])
@@ -262,15 +181,9 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             upper_bound = float('inf') if suboptimal else lower_or - upper_11 - change_diff
             lower_bound = -float('inf') if optimal else upper_or - lower_11 + change_diff
 
-            prev_calculations["uppers"][0] = upper_00 
-            prev_calculations["uppers"][1] = upper_01 
-            prev_calculations["uppers"][2] = upper_10 
-            prev_calculations["uppers"][3] = upper_11
-            prev_calculations["lowers"][0] = lower_00 
-            prev_calculations["lowers"][1] = lower_01 
-            prev_calculations["lowers"][2] = lower_10 
-            prev_calculations["lowers"][3] = lower_11
-
+            prev_calculations["uppers"] = [upper_00, upper_01, upper_10, upper_11]
+            prev_calculations["lowers"] = [lower_00, lower_01, lower_10, lower_11]
+            
             prev_calculations["upper_sample"][0] = PA_00.expand(u_00) 
             prev_calculations["upper_sample"][1] = PA_01.expand(u_01) 
             prev_calculations["upper_sample"][2] = PA_10.expand(u_10)
@@ -301,15 +214,117 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             upper_bound = float("inf") if suboptimal else lower_0 - upper_1 - change_diff
             lower_bound = -float("inf") if optimal else upper_0 - lower_1 + change_diff
 
-            prev_calculations["uppers"][0] = upper_0
-            prev_calculations["uppers"][1] = upper_1 
-            prev_calculations["lowers"][0] = lower_0
-            prev_calculations["lowers"][1] = lower_1
+            prev_calculations["uppers"] = [upper_0, upper_1]
+            prev_calculations["lowers"] = [lower_0, lower_1]
 
             prev_calculations["upper_sample"][0] = PA_0.expand(u_0)
             prev_calculations["upper_sample"][1] = PA_1.expand(u_1)
             
     return lower_bound, upper_bound, prev_calculations
+
+def _update_bounds_ij(prev_calculations, old_i, old_j, prev_change, lower_bound, i, j, Q):
+    prev_lowers = prev_calculations["lowers"]
+    prev_uppers = prev_calculations["uppers"]
+        
+    upper_00 = prev_uppers[0]
+    upper_01 = prev_uppers[1]
+    upper_10 = prev_uppers[2]
+    upper_11 = prev_uppers[3]
+
+    u_00 = prev_calculations["upper_sample"][0]
+    u_01 = prev_calculations["upper_sample"][1]
+    u_10 = prev_calculations["upper_sample"][2]
+    u_11 = prev_calculations["upper_sample"][3]
+    if u_00[old_i] + u_00[old_j] == 2:
+        upper_00 = upper_00 + prev_change
+    if u_01[old_i] + u_01[old_j] == 2:
+        upper_01 = upper_01 + prev_change
+    if u_10[old_i] + u_10[old_j] == 2:
+        upper_10 = upper_10 + prev_change
+    if u_11[old_i] + u_11[old_j] == 2:
+        upper_11 = upper_11 + prev_change
+
+    #updating the lower bounds to the change
+    if lower_bound == _roof_dual_change and False:
+        G = prev_calculations["lower_graph"]
+        P, c = Q.to_posiform()
+        #incorporate the change into the graph
+        G, _ = _adapt_graph(P, G, (old_i, old_j))
+        #safe the new graph
+        prev_calculations["lower_graph"] = G
+        #clamp i=0, j=0
+        lower_00 = _clamp_graph(Q, G, old_i, old_j)
+        #clamp i=0, j=1
+        lower_01 = _clamp_graph(Q, G, old_i, old_j)
+        #clamp i=1, j=0
+        lower_10 = _clamp_graph(Q, G, old_i, old_j)
+        #clamp i=1, j=1
+        lower_11 = _clamp_graph(Q, G, old_i, old_j)
+
+    #remove later when adapting lower bound works too
+    assingment_00 = "x" + str(i) + "=0; x" + str(j) + "=0"
+    assingment_01 = "x" + str(i) + "=0; x" + str(j) + "=1"
+    assingment_10 = "x" + str(i) + "=1; x" + str(j) + "=0"
+    assingment_11 = "x" + str(i) + "=1; x" + str(j) + "=1"
+    PA_00 = partial_assignment(assingment_00, n=Q.n)
+    PA_01 = partial_assignment(assingment_01, n=Q.n)
+    PA_10 = partial_assignment(assingment_10, n=Q.n)
+    PA_11 = partial_assignment(assingment_11, n=Q.n)
+    Q_00, c_00 = PA_00.apply(Q)
+    Q_01, c_01 = PA_01.apply(Q)
+    Q_10, c_10 = PA_10.apply(Q)
+    Q_11, c_11 = PA_11.apply(Q)
+    lower_00 = lower_bound(Q_00) + c_00
+    lower_01 = lower_bound(Q_01) + c_01
+    lower_10 = lower_bound(Q_10) + c_10
+    lower_11 = lower_bound(Q_11) + c_11
+    
+    #saving the new bounds
+    prev_calculations["uppers"] = [upper_00, upper_01, upper_10, upper_11]
+    prev_calculations["lowers"] = [lower_00, lower_01, lower_10, lower_11]
+
+    return upper_00, upper_01, upper_10, upper_11, lower_00, lower_01, lower_10, lower_11
+        
+def _update_bounds_i(prev_calculations, old_i, old_j, prev_change, lower_bound, i, Q):
+    prev_lowers = prev_calculations["lowers"]
+    prev_uppers = prev_calculations["uppers"]
+
+    upper_0 = prev_uppers[0]
+    upper_1 = prev_uppers[1]
+    
+    u_0 = prev_calculations["upper_sample"][0]
+    u_1 = prev_calculations["upper_sample"][1]
+    if u_0[old_i] + u_0[old_j] == 2:
+        upper_0 = upper_0 + prev_change
+    if u_1[old_i] + u_1[old_j] == 2:
+        upper_1 = upper_1 + prev_change
+
+    if lower_bound == _roof_dual_change and False:
+        G = prev_calculations["lower_graph"]
+        P, c = Q.to_posiform()
+        #incorporate the change into the graph
+        G, _ = _adapt_graph(P, G, (old_i, old_j))
+        #safe the new graph
+        prev_calculations["lower_graph"] = G
+        #clamp i=0
+        lower_0 = _clamp_graph(Q, G, old_i, old_j)
+        #clamp i=1
+        lower_1 = _clamp_graph(Q, G, old_i, old_j)
+
+    #remove later when adapting lower bound works too
+    assingment_0 = "x" + str(i) + "=0"
+    assingment_1 = "x" + str(i) + "=1"
+    PA_0 = partial_assignment(assingment_0, n=Q.n)
+    PA_1 = partial_assignment(assingment_1, n=Q.n)
+    Q_0, c_0 = PA_0.apply(Q)
+    Q_1, c_1 = PA_1.apply(Q)
+    lower_0 = lower_bound(Q_0) + c_0
+    lower_1 = lower_bound(Q_1) + c_1
+
+    prev_calculations["uppers"] = [upper_0, upper_1]
+    prev_calculations["lowers"] = [lower_0, lower_1]
+
+    return upper_0, upper_1, lower_0, lower_1
 
 def _adapt_graph(P, G_orig, change_idx):
     """Given the old graph G_orig and the new posiform P, adapt the graph to the new posiform"""
@@ -425,10 +440,8 @@ def _compute_index_change(matrix_order, i, j, heuristic=None, prev_calculations=
     # Bounds on changes based on preserving the optimum
     if increase:
         _, pre_opt_change, prev_calculations = _compute_pre_opt_bounds(matrix_order.matrix, i, j, prev_calculations, prev_change, prev_changed_indices, **kwargs)
-        prev_calculations["prev_increase"] = True #do i even need this still?
     else:
         pre_opt_change, _, prev_calculations = _compute_pre_opt_bounds(matrix_order.matrix, i, j, prev_calculations, prev_change, prev_changed_indices, **kwargs)
-        prev_calculations["prev_increase"] = False
     prev_calculations["dr_change"] = dyn_range_change
     prev_calculations["opt_change"] = pre_opt_change
     set_to_zero = heuristic.set_to_zero()
@@ -497,7 +510,7 @@ def reduce_dynamic_range(
     matrix_order = MatrixOrder(Q_copy.m)
     stop_update = False
     matrix_order.matrix = np.round(matrix_order.matrix, decimals=8)
-    all_prev_calculations = {"change": None, "prev_changed_indices": None}
+    all_prev_calculations = {"change": None, "prev_changed_indices": None, "memory": dict()}
     change = 1
     for it in range(iterations):
         if not stop_update and not change == 0:
@@ -512,9 +525,7 @@ def reduce_dynamic_range(
             all_prev_calculations["change"] = change
             all_prev_calculations["prev_changed_indices"] = (i, j)
             print(it + 1, matrix_order.matrix)
-            print("(1,2): ", all_prev_calculations[(1,2)])
-            print("-"*10)
-            del all_prev_calculations[(i,j)]
+            del all_prev_calculations["memory"][(i,j)]
             if callback is not None:
                 callback(i, j, change, matrix_order, it)
         else:
