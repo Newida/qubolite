@@ -40,16 +40,20 @@ def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all
         indices = matrix_order.to_matrix_indices(order_indices, matrix_order.matrix.shape[0])
         changes = list()
         drs = list()
-        for x in indices:
+        previous_change = all_prev_calculations["change"]
+        previous_changed_indices = all_prev_calculations["prev_changed_indices"]
+        for i, j in indices:
+            if (i,j) not in all_prev_calculations:
+                all_prev_calculations[(i,j)] = None
+
+        for x in all_prev_calculations.keys():
+            if not isinstance(x, tuple):
+                continue
             i, j = x
-            if (i,j) in all_prev_calculations.keys():
-                change, calculation = _compute_index_change(matrix_order, i, j,
-                                            heuristic, all_prev_calculations[(i,j)], all_prev_calculations["change"], all_prev_calculations["prev_changed_indices"],
-                                            **bound_params)
-            else:
-                change, calculation = _compute_index_change(matrix_order=matrix_order, i=i, j=j,
-                                            heuristic=heuristic, prev_calculations=None, prev_change=None, prev_changed_indices=None,
-                                            **bound_params)
+            memory = all_prev_calculations[(i,j)]
+            change, calculation = _compute_index_change(matrix_order, i, j,
+                                        heuristic, memory, previous_change, previous_changed_indices,
+                                        **bound_params)
             all_prev_calculations[(i,j)] = calculation
             changes.append(change)
 
@@ -157,12 +161,11 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             prev_calculations["uppers"][2] = upper_10 
             prev_calculations["uppers"][3] = upper_11
             
-            if lower_bound == _roof_dual_change and False:
-                prev_calculations["lowers"][0] = lower_00 
-                prev_calculations["lowers"][1] = lower_01 
-                prev_calculations["lowers"][2] = lower_10 
-                prev_calculations["lowers"][3] = lower_11
-                
+            prev_calculations["lowers"][0] = lower_00 
+            prev_calculations["lowers"][1] = lower_01 
+            prev_calculations["lowers"][2] = lower_10 
+            prev_calculations["lowers"][3] = lower_11
+            
         else:
             old_i = prev_changed_indices[0]
             old_j = prev_changed_indices[1]
@@ -204,12 +207,11 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             optimal = upper_1 < lower_or
             upper_bound = float("inf") if suboptimal else upper_or - lower_1 - change_diff
             lower_bound = -float("inf") if optimal else lower_or - upper_1 + change_diff
+
             prev_calculations["uppers"][0] = upper_0 
             prev_calculations["uppers"][1] = upper_1 
-
-            if lower_bound == _roof_dual_change and False:
-                prev_calculations["lowers"][0] = lower_0 
-                prev_calculations["lowers"][1] = lower_1 
+            prev_calculations["lowers"][0] = lower_0 
+            prev_calculations["lowers"][1] = lower_1 
     else:
         if i != j:
             prev_calculations = {"prev_increase": None, "uppers": [0.0,0.0,0.0,0.0], "lowers": [0.0,0.0,0.0,0.0], "upper_sample": [0, 0, 0, 0], "lower_graph": None}
@@ -495,12 +497,13 @@ def reduce_dynamic_range(
     matrix_order = MatrixOrder(Q_copy.m)
     stop_update = False
     matrix_order.matrix = np.round(matrix_order.matrix, decimals=8)
-    all_prev_calculations = dict()
+    all_prev_calculations = {"change": None, "prev_changed_indices": None}
+    change = 1
     for it in range(iterations):
-        if not stop_update:
+        if not stop_update and not change == 0:
             if it % 1000 == 0:
                 #resetting memory to calculate new bounds
-                all_prev_calculations = dict()
+                all_prev_calculations = {"change": None, "prev_changed_indices": None}
             i, j, change, all_prev_calculations = _compute_change(matrix_order=matrix_order, npr=npr, heuristic=heuristic,
                                             decision=decision,
                                             all_prev_calculations=all_prev_calculations, **kwargs)
@@ -509,6 +512,8 @@ def reduce_dynamic_range(
             all_prev_calculations["change"] = change
             all_prev_calculations["prev_changed_indices"] = (i, j)
             print(it + 1, matrix_order.matrix)
+            print("(1,2): ", all_prev_calculations[(1,2)])
+            print("-"*10)
             del all_prev_calculations[(i,j)]
             if callback is not None:
                 callback(i, j, change, matrix_order, it)
