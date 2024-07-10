@@ -47,10 +47,10 @@ def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all
         known_set = set(all_prev_calculations["memory"].keys())
         known_candidates = indices_set & known_set
         unknown_candidates = indices_set - known_set
-        other_known_indices = known_set - indices_set
+        old_known_candidates = known_set - indices_set
 
         for i, j in known_candidates:
-            memory = all_prev_calculations[(i,j)]
+            memory = all_prev_calculations["memory"][(i,j)]
             change, calculation = _compute_index_change(matrix_order, i, j,
                                         heuristic, memory, previous_change, previous_changed_indices,
                                         **bound_params)
@@ -67,14 +67,14 @@ def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all
             changes.append(change)
             drs.append(_dynamic_range_change(i, j, change, matrix_order))
 
-        for i, j in other_known_indices:
+        for i, j in old_known_candidates:
             lower_bound = {
                 'roof_dual': lb_roof_dual, #_roof_dual_change,
                 'min_sum': lb_negative_parameters
                 }[bound_params.get('lower_bound', 'roof_dual')]
             lower_bound = partial(lower_bound, **bound_params.get('lower_bound_kwargs', {}))
             old_i, old_j = previous_changed_indices
-            memory = all_prev_calculations[(i,j)]    
+            memory = all_prev_calculations["memory"][(i,j)]    
             if i != j:
                 _update_bounds_ij(memory, old_i, old_j, previous_change, lower_bound, i, j, qubo(matrix_order.matrix))
             else:
@@ -516,7 +516,7 @@ def reduce_dynamic_range(
         if not stop_update and not change == 0:
             if it % 1000 == 0:
                 #resetting memory to calculate new bounds
-                all_prev_calculations = {"change": None, "prev_changed_indices": None}
+                all_prev_calculations = {"change": None, "prev_changed_indices": None, "memory": dict()}
             i, j, change, all_prev_calculations = _compute_change(matrix_order=matrix_order, npr=npr, heuristic=heuristic,
                                             decision=decision,
                                             all_prev_calculations=all_prev_calculations, **kwargs)
