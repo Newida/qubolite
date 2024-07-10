@@ -40,6 +40,7 @@ def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all
         indices = matrix_order.to_matrix_indices(order_indices, matrix_order.matrix.shape[0])
         changes = list()
         drs = list()
+        drs_indices = list()
         previous_change = all_prev_calculations["change"]
         previous_changed_indices = all_prev_calculations["prev_changed_indices"]
 
@@ -57,6 +58,7 @@ def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all
             all_prev_calculations["memory"][(i,j)] = calculation
             changes.append(change)
             drs.append(_dynamic_range_change(i, j, change, matrix_order))
+            drs_indices.append((i, j))
 
         for i, j in unknown_candidates:
             memory = None
@@ -66,6 +68,7 @@ def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all
             all_prev_calculations["memory"][(i,j)] = calculation
             changes.append(change)
             drs.append(_dynamic_range_change(i, j, change, matrix_order))
+            drs_indices.append((i, j))
 
         for i, j in old_known_candidates:
             lower_bound = {
@@ -82,7 +85,7 @@ def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all
 
         if np.any(drs):
             index = np.argmax(drs)
-            i, j = indices[index]
+            i, j = drs_indices[index]
             change = changes[index]
         else:
             i, j = _get_random_index_pair(matrix_order, npr)
@@ -525,6 +528,7 @@ def reduce_dynamic_range(
             all_prev_calculations["change"] = change
             all_prev_calculations["prev_changed_indices"] = (i, j)
             print(it + 1, matrix_order.matrix)
+            print("CHANGE", change)
             del all_prev_calculations["memory"][(i,j)]
             if callback is not None:
                 callback(i, j, change, matrix_order, it)
