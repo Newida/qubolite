@@ -514,7 +514,7 @@ def reduce_dynamic_range(
     all_prev_calculations = {"change": None, "prev_changed_indices": None, "memory": dict()}
     change = 1
     for it in range(iterations):
-        if not stop_update and not change == 0:
+        if not stop_update:
             if it % 1000 == 0:
                 #resetting memory to calculate new bounds
                 all_prev_calculations = {"change": None, "prev_changed_indices": None, "memory": dict()}
@@ -525,7 +525,7 @@ def reduce_dynamic_range(
             stop_update = matrix_order.update_entry(i, j, change)
             all_prev_calculations["change"] = change
             all_prev_calculations["prev_changed_indices"] = (i, j)
-            print(it + 1, matrix_order.matrix)
+            print(it + 1, qubo(matrix_order.matrix))
             print("CHANGE", change)
             del all_prev_calculations["memory"][(i,j)]
             if callback is not None:
