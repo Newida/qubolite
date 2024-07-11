@@ -525,8 +525,8 @@ def reduce_dynamic_range(
             stop_update = matrix_order.update_entry(i, j, change)
             all_prev_calculations["change"] = change
             all_prev_calculations["prev_changed_indices"] = (i, j)
-            print(it + 1, qubo(matrix_order.matrix))
-            print("CHANGE", change)
+            #print(it + 1, qubo(matrix_order.matrix))
+            #print("CHANGE", change)
             del all_prev_calculations["memory"][(i,j)]
             if callback is not None:
                 callback(i, j, change, matrix_order, it)
