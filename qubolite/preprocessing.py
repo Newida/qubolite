@@ -126,12 +126,10 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
         else:
             #updating the upper bounds to the change
             upper_0, upper_1, lower_0, lower_1 = _update_bounds_i(prev_calculations, old_i, old_j, prev_change, lower_bound, i, Q)
-            upper_or = upper_0
-            lower_or = lower_0
-            suboptimal = lower_1 > upper_or
-            optimal = upper_1 < lower_or
-            upper_bound = float("inf") if suboptimal else upper_or - lower_1 - change_diff
-            lower_bound = -float("inf") if optimal else lower_or - upper_1 + change_diff
+            suboptimal = lower_1 > upper_0
+            optimal = upper_1 < lower_0
+            upper_bound = float("inf") if suboptimal else lower_0 - upper_1 - change_diff
+            lower_bound = -float("inf") if optimal else upper_0 - lower_1 + change_diff
 
     else:
         if i != j:
