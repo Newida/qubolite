@@ -135,6 +135,7 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
         if i != j:
             prev_calculations = {"prev_increase": None, "uppers": [0.0,0.0,0.0,0.0], "lowers": [0.0,0.0,0.0,0.0], "upper_sample": [0, 0, 0, 0], "lower_graph": None}
             # Define sub-qubos
+             #TODO: replace this with Q.clamp?
             assingment_00 = "x" + str(i) + "=0; x" + str(j) + "=0"
             assingment_01 = "x" + str(i) + "=0; x" + str(j) + "=1"
             assingment_10 = "x" + str(i) + "=1; x" + str(j) + "=0"
@@ -147,6 +148,10 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             Q_01, c_01 = PA_01.apply(Q)
             Q_10, c_10 = PA_10.apply(Q)
             Q_11, c_11 = PA_11.apply(Q)
+            Q_00, c_00, _ = Q.clamp({i: 0, j: 0})
+            Q_01, c_01, _ = Q.clamp({i: 0, j: 1})
+            Q_10, c_10, _ = Q.clamp({i: 1, j: 0})
+            Q_11, c_11, _ = Q.clamp({i: 1, j: 1})
 
             if Q.n == 2:
                 upper_00 = c_00
@@ -185,6 +190,7 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             prev_calculations["uppers"] = [upper_00, upper_01, upper_10, upper_11]
             prev_calculations["lowers"] = [lower_00, lower_01, lower_10, lower_11]
             
+            #if Q.clamp is used than this has to be solved differently
             prev_calculations["upper_sample"][0] = PA_00.expand(u_00) 
             prev_calculations["upper_sample"][1] = PA_01.expand(u_01) 
             prev_calculations["upper_sample"][2] = PA_10.expand(u_10)
@@ -196,6 +202,7 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
         else:
             prev_calculations = {"prev_increase": None, "uppers": [0.0,0.0], "lowers": [0.0,0.0], "upper_sample": [0, 0], "lower_graph": None}
             # Define sub-qubos
+            #TODO: replace this with Q.clamp?
             assingment_0 = "x" + str(i) + "=0"
             assingment_1 = "x" + str(i) + "=1"
             PA_0 = partial_assignment(assingment_0, n=Q.n)
@@ -218,6 +225,7 @@ def _compute_pre_opt_bounds(Q, i, j, prev_calculations=None, prev_change=None, p
             prev_calculations["uppers"] = [upper_0, upper_1]
             prev_calculations["lowers"] = [lower_0, lower_1]
 
+            #if Q.clamp is used than this has to be solved differently
             prev_calculations["upper_sample"][0] = PA_0.expand(u_0)
             prev_calculations["upper_sample"][1] = PA_1.expand(u_1)
             
@@ -263,6 +271,8 @@ def _update_bounds_ij(prev_calculations, old_i, old_j, prev_change, lower_bound,
         lower_11 = _clamp_graph(Q, G, old_i, old_j)
 
     #remove later when adapting lower bound works too
+    """
+    this is extremly slow compared to Q.clamp
     assingment_00 = "x" + str(i) + "=0; x" + str(j) + "=0"
     assingment_01 = "x" + str(i) + "=0; x" + str(j) + "=1"
     assingment_10 = "x" + str(i) + "=1; x" + str(j) + "=0"
@@ -275,6 +285,11 @@ def _update_bounds_ij(prev_calculations, old_i, old_j, prev_change, lower_bound,
     Q_01, c_01 = PA_01.apply(Q)
     Q_10, c_10 = PA_10.apply(Q)
     Q_11, c_11 = PA_11.apply(Q)
+    """
+    Q_00, c_00, _ = Q.clamp({i: 0, j: 0})
+    Q_01, c_01, _ = Q.clamp({i: 0, j: 1})
+    Q_10, c_10, _ = Q.clamp({i: 1, j: 0})
+    Q_11, c_11, _ = Q.clamp({i: 1, j: 1})
     lower_00 = lower_bound(Q_00) + c_00
     lower_01 = lower_bound(Q_01) + c_01
     lower_10 = lower_bound(Q_10) + c_10
@@ -313,12 +328,16 @@ def _update_bounds_i(prev_calculations, old_i, old_j, prev_change, lower_bound, 
         lower_1 = _clamp_graph(Q, G, old_i, old_j)
 
     #remove later when adapting lower bound works too
+    """
     assingment_0 = "x" + str(i) + "=0"
     assingment_1 = "x" + str(i) + "=1"
     PA_0 = partial_assignment(assingment_0, n=Q.n)
     PA_1 = partial_assignment(assingment_1, n=Q.n)
     Q_0, c_0 = PA_0.apply(Q)
     Q_1, c_1 = PA_1.apply(Q)
+    """
+    Q_0, c_0, _ = Q.clamp({i: 0})
+    Q_1, c_1, _ = Q.clamp({i: 1})
     lower_0 = lower_bound(Q_0) + c_0
     lower_1 = lower_bound(Q_1) + c_1
 
@@ -515,7 +534,7 @@ def reduce_dynamic_range(
     change = 1
     for it in range(iterations):
         if not stop_update:
-            if it % 1000 == 0:
+            if it % 2000 == 0:
                 #resetting memory to calculate new bounds
                 all_prev_calculations = {"change": None, "prev_changed_indices": None, "memory": dict()}
             i, j, change, all_prev_calculations = _compute_change(matrix_order=matrix_order, npr=npr, heuristic=heuristic,
