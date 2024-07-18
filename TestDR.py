@@ -29,7 +29,7 @@ def test_reduce_dynamic_range(maxDim, testSize=50):
         Q = qubo.random(n=n, distr='uniform', low=-1, high=1)
         solutions_truth, _ = brute_force_solutions(Q)
         try:
-            Q_reduced = reduce_dynamic_range(Q, heuristic='greedy0', decision='heuristic', iterations=100)
+            Q_reduced = reduce_dynamic_range(Q, heuristic='order', decision='random', iterations=100)
         except Exception as e:  
             print("Error: ", e)
             print("Q: ", Q)
@@ -41,11 +41,12 @@ def test_reduce_dynamic_range(maxDim, testSize=50):
             return Q, Q_reduced
     return True, True
 
-Q, Q_reduced = test_reduce_dynamic_range(6, 1000)
+#Q, Q_reduced = test_reduce_dynamic_range(6, 1000)
+Q = qubo(np.array([[ 0.16123331, -0.5058326 ],
+       [ 0.        ,  0.01344138]]))
+Q_reduced = reduce_dynamic_range(Q, heuristic='order', decision='random', iterations=100)
 
-#TODO:
-#The following instance shows some error in the upper bound calculation cumulating over many iterations
-#Investigate the error and fix it
+#TODO: tests does not pass when using heuristic='order'
 """
 Q = qubo(np.array([[-0.25633977, -0.18576958, -0.66119149,  0.98867377, -0.53236569,
          0.68374399, -0.80342775, -0.11885048,  0.94143421, -0.4059954 ],

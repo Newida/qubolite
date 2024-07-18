@@ -34,7 +34,8 @@ def _get_random_index_pair(matrix_order, npr):
 def _compute_change(matrix_order, npr, heuristic=None, decision='heuristic', all_prev_calculations=dict(), **bound_params):
     if decision == 'random':
         i, j = _get_random_index_pair(matrix_order, npr)
-        change = _compute_index_change(matrix_order, i, j, heuristic=heuristic, **bound_params)
+        change, calculation = _compute_index_change(matrix_order, i, j, heuristic=heuristic, **bound_params)
+        all_prev_calculations["memory"][(i,j)] = calculation
     elif decision == 'heuristic':
         order_indices = matrix_order.dynamic_range_impact()
         indices = matrix_order.to_matrix_indices(order_indices, matrix_order.matrix.shape[0])
